@@ -3,6 +3,7 @@ import { setSetting } from "./db/settings";
 import type { AppEnv } from "./env";
 import { handleLinkRedirect } from "./links";
 import { dataDeletionPage, privacyPage, termsPage } from "./pages";
+import { runScheduler } from "./scheduler";
 import { handleEvents } from "./webhook/handle";
 import { parseWebhook } from "./webhook/parse";
 import { handshakeChallenge, verifySignature } from "./webhook/verify";
@@ -44,4 +45,13 @@ app.get("/data-deletion", (c) => c.html(dataDeletionPage(c.env.CONTACT_EMAIL)));
 
 export default {
   fetch: app.fetch,
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      runScheduler(env, controller.scheduledTime).then((report) => {
+        if (report.sent + report.retried + report.failed + report.dropped > 0) {
+          console.log(JSON.stringify({ scheduler: report }));
+        }
+      }),
+    );
+  },
 } satisfies ExportedHandler<AppEnv>;
