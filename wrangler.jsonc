@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dm-automation",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    "GRAPH_API_VERSION": "v25.0",
+    // Replaced with the real workers.dev URL in Task 12.
+    "PUBLIC_URL": "https://dm-automation.YOUR-SUBDOMAIN.workers.dev",
+    // Shown on the privacy / data-deletion pages Meta requires. Set in Task 12.
+    "CONTACT_EMAIL": "you@example.com"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dm-automation",
+      // Replaced with the real ID from `wrangler d1 create` in Task 12.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
