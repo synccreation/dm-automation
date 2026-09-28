@@ -28,3 +28,9 @@ export async function verifySignature(rawBody: string, header: string | null, se
   }
   return false;
 }
+
+/** Zernio signs the raw body: `X-Zernio-Signature: <lowercase hex HMAC-SHA256>` (no prefix). */
+export async function verifyZernioSignature(rawBody: string, header: string | null, secret: string): Promise<boolean> {
+  if (!header || !secret) return false;
+  return constantTimeEqual(header.trim().toLowerCase(), await hmacSha256Hex(secret, rawBody));
+}
