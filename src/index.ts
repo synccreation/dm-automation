@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { admin } from "./admin";
 import { setSetting } from "./db/settings";
 import type { AppEnv } from "./env";
 import { handleLinkRedirect } from "./links";
@@ -42,6 +43,8 @@ app.get("/l/:code", (c) =>
 app.get("/privacy", (c) => c.html(privacyPage(c.env.CONTACT_EMAIL)));
 app.get("/terms", (c) => c.html(termsPage(c.env.CONTACT_EMAIL)));
 app.get("/data-deletion", (c) => c.html(dataDeletionPage(c.env.CONTACT_EMAIL)));
+
+app.route("/admin", admin);
 
 export default {
   fetch: app.fetch,
