@@ -11,9 +11,8 @@ export default defineConfig(async () => {
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
-            IG_APP_ID: "test-app-id",
-            IG_APP_SECRET: "test-app-secret",
-            WEBHOOK_VERIFY_TOKEN: "test-verify-token",
+            ZERNIO_API_KEY: "sk_test",
+            ZERNIO_WEBHOOK_SECRET: "test-webhook-secret",
             ADMIN_TOKEN: "test-admin-token",
             PUBLIC_URL: "https://dm.test",
             CONTACT_EMAIL: "creator@example.com",

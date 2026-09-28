@@ -4,9 +4,9 @@ export type ActionType = "private_reply" | "public_reply" | "dm";
 export type ActionStatus = "pending" | "sending" | "sent" | "failed" | "dropped";
 
 export type ActionPayload =
-  | { kind: "private_reply"; commentId: string; message: OutgoingMessage }
-  | { kind: "public_reply"; commentId: string; text: string }
-  | { kind: "dm"; igsid: string; message: OutgoingMessage };
+  | { kind: "private_reply"; mediaId: string; commentId: string; text: string }
+  | { kind: "public_reply"; mediaId: string; commentId: string; text: string }
+  | { kind: "dm"; conversationId: string; message: OutgoingMessage };
 
 export interface ActionRow {
   id: number;
@@ -83,6 +83,17 @@ export async function claimDueActions(
     .bind(now, now, ...types, limit)
     .all<RawAction>();
   return results.map(toAction).sort((a, b) => a.send_at - b.send_at || a.id - b.id);
+}
+
+/** Claims one specific pending action (for an immediate send); null if someone else has it. */
+export async function claimActionById(db: D1Database, id: number, now: number): Promise<ActionRow | null> {
+  const raw = await db
+    .prepare(
+      "UPDATE actions SET status = 'sending', attempts = attempts + 1, claimed_at = ? WHERE id = ? AND status = 'pending' RETURNING *",
+    )
+    .bind(now, id)
+    .first<RawAction>();
+  return raw ? toAction(raw) : null;
 }
 
 export async function markSent(db: D1Database, id: number, mid: string | null, now: number): Promise<void> {

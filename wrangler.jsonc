@@ -6,7 +6,6 @@
   "observability": { "enabled": true },
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
-    "GRAPH_API_VERSION": "v25.0",
     "PUBLIC_URL": "https://dm-automation.synccreation.workers.dev",
     // Shown on the privacy / data-deletion pages Meta requires.
     "CONTACT_EMAIL": "synccreation@artlayers.info"

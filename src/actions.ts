@@ -1,15 +1,17 @@
-import type { ActionPayload } from "./db/actions";
-import type { InstagramClient } from "./instagram";
+import type { ActionRow } from "./db/actions";
+import type { ZernioClient } from "./zernio";
 
-/** Sends one queued action. Returns the Instagram message id for DMs, null for public replies. */
-export async function executeAction(ig: InstagramClient, payload: ActionPayload): Promise<string | null> {
+/** Sends one queued action. Returns the id of what was created (message or comment). */
+export async function executeAction(zernio: ZernioClient, action: ActionRow): Promise<string | null> {
+  const payload = action.payload;
+  // Idempotency keys make Zernio replay instead of re-sending if we retry after a lost response.
+  const key = `action-${action.id}`;
   switch (payload.kind) {
     case "private_reply":
-      return (await ig.sendMessage({ comment_id: payload.commentId }, payload.message)).messageId;
+      return (await zernio.privateReply(payload.mediaId, payload.commentId, payload.text)).messageId;
     case "public_reply":
-      await ig.replyToComment(payload.commentId, payload.text);
-      return null;
+      return (await zernio.replyToComment(payload.mediaId, payload.commentId, payload.text, key)).commentId;
     case "dm":
-      return (await ig.sendMessage({ id: payload.igsid }, payload.message)).messageId;
+      return (await zernio.sendDm(payload.conversationId, payload.message, key)).messageId;
   }
 }

@@ -1,14 +1,14 @@
 import { Hono, type Context } from "hono";
-import { instagramFromSettings } from "./account";
-import { startAuth } from "./auth";
+import { zernioFromSettings } from "./account";
 import { recentActions } from "./db/actions";
 import { getRule, insertRule, listRules, updateRule, type NewRule } from "./db/rules";
 import type { AppEnv } from "./env";
 import { getHealth } from "./health";
-import { InstagramError } from "./instagram";
 import { createTrackedLink } from "./links";
 import { parseNewRule, parseRulePatch } from "./rule-input";
+import { runSetup } from "./setup";
 import { constantTimeEqual } from "./webhook/verify";
+import { ZernioError } from "./zernio";
 
 export const admin = new Hono<{ Bindings: AppEnv }>();
 
@@ -28,7 +28,17 @@ async function readJson(c: Context): Promise<unknown> {
   }
 }
 
-admin.post("/auth/start", async (c) => c.json({ url: await startAuth(c.env, Date.now()) }));
+admin.post("/setup", async (c) => {
+  const body = await readJson(c);
+  const requested = (body as { accountId?: unknown } | undefined)?.accountId;
+  try {
+    const result = await runSetup(c.env, typeof requested === "string" ? requested : null);
+    return result.ok ? c.json(result) : c.json(result, 409);
+  } catch (err) {
+    if (err instanceof ZernioError) return c.json({ error: err.message }, 502);
+    throw err;
+  }
+});
 
 admin.get("/health", async (c) => c.json(await getHealth(c.env, Date.now())));
 
@@ -57,12 +67,12 @@ admin.patch("/rules/:id", async (c) => {
 });
 
 admin.get("/media", async (c) => {
-  const ig = await instagramFromSettings(c.env);
-  if (!ig) return c.json({ error: "Instagram is not connected. Run: npm run cli -- connect" }, 409);
+  const zernio = await zernioFromSettings(c.env);
+  if (!zernio) return c.json({ error: "Not set up yet. Run: npm run cli -- setup" }, 409);
   try {
-    return c.json(await ig.listMedia(25));
+    return c.json(await zernio.listPosts());
   } catch (err) {
-    if (err instanceof InstagramError) return c.json({ error: err.message }, 502);
+    if (err instanceof ZernioError) return c.json({ error: err.message }, 502);
     throw err;
   }
 });

@@ -1,13 +1,10 @@
 import { getSetting } from "./db/settings";
 import type { AppEnv } from "./env";
-import { createInstagramClient, type InstagramClient } from "./instagram";
+import { createZernioClient, type ZernioClient } from "./zernio";
 
-/** The client for the connected Instagram account, or null until OAuth has completed. */
-export async function instagramFromSettings(env: AppEnv): Promise<InstagramClient | null> {
-  const [accessToken, igUserId] = await Promise.all([
-    getSetting(env.DB, "ig_access_token"),
-    getSetting(env.DB, "ig_user_id"),
-  ]);
-  if (!accessToken || !igUserId) return null;
-  return createInstagramClient({ accessToken, igUserId, version: env.GRAPH_API_VERSION });
+/** The Zernio client for the linked Instagram account, or null until `npm run cli -- setup`. */
+export async function zernioFromSettings(env: AppEnv): Promise<ZernioClient | null> {
+  const accountId = await getSetting(env.DB, "zernio_account_id");
+  if (!accountId || !env.ZERNIO_API_KEY) return null;
+  return createZernioClient({ apiKey: env.ZERNIO_API_KEY, accountId });
 }

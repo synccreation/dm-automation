@@ -4,22 +4,12 @@ import { insertTrigger } from "../src/db/events";
 import { insertLink } from "../src/db/links";
 import { insertRule, type NewRule } from "../src/db/rules";
 import { getSetting } from "../src/db/settings";
-import { app } from "../src/index";
-import { hmacSha256Hex } from "../src/webhook/verify";
 import { newRule } from "./factories";
-import { commentPayload, messagingPayload } from "./fixtures";
-import { IG_USER_ID, resetDb, seedConnectedAccount, testEnv } from "./helpers";
+import { commentEvent } from "./fixtures";
+import { postWebhook, postWebhookRaw, resetDb, seedConnectedAccount, testEnv } from "./helpers";
 
 const VARIANTS = ["Sent! Check your DMs 👀", "Just sent it 🙌"];
-
-async function postWebhook(body: unknown, secret = "test-app-secret"): Promise<Response> {
-  const raw = JSON.stringify(body);
-  return app.request("/webhook", {
-    method: "POST",
-    body: raw,
-    headers: { "Content-Type": "application/json", "X-Hub-Signature-256": `sha256=${await hmacSha256Hex(secret, raw)}` },
-  }, testEnv);
-}
+const PROMPT = "Hey anna! Reply to this message and I'll send you the guide 👇";
 
 async function seedRule(overrides: Partial<NewRule> = {}) {
   const link = await insertLink(testEnv.DB, "abc123", "https://example.com/guide", "Guide", Date.now());
@@ -35,6 +25,10 @@ async function count(table: string): Promise<number> {
   return (await testEnv.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())!.n;
 }
 
+async function linkState(): Promise<string | undefined> {
+  return (await testEnv.DB.prepare("SELECT link_state FROM triggers").first<{ link_state: string }>())?.link_state;
+}
+
 beforeEach(async () => {
   await resetDb();
   await seedConnectedAccount();
@@ -42,41 +36,28 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("POST /webhook: comments", () => {
-  it("rejects an invalid signature and stores nothing", async () => {
+  it("rejects an invalid signature, stores nothing and logs why", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await seedRule();
-    const res = await postWebhook(commentPayload(), "wrong-secret");
+    const res = await postWebhook(commentEvent(), "wrong-secret");
     expect(res.status).toBe(401);
     expect(await count("actions")).toBe(0);
     expect(await count("processed_events")).toBe(0);
-  });
-
-  it("logs a rejected signature so wrangler tail shows why", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await postWebhook(commentPayload(), "wrong-secret");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("bad signature"));
   });
 
-  it("queues a public reply and an opening DM about a minute out", async () => {
+  it("queues a public reply and a text-only opening DM about a minute out", async () => {
     await seedRule();
     const before = Date.now();
-    const res = await postWebhook(commentPayload());
+    const res = await postWebhook(commentEvent());
     const after = Date.now();
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe("EVENT_RECEIVED");
-    expect(await count("triggers")).toBe(1);
+    expect(await linkState()).toBe("awaiting_reply");
 
     const [publicReply, privateReply] = await actions();
-    expect(publicReply!.type).toBe("public_reply");
+    expect(publicReply!.payload).toMatchObject({ kind: "public_reply", mediaId: "media-1", commentId: "c-1" });
     expect(VARIANTS).toContain((publicReply!.payload as { text: string }).text);
-    expect(privateReply!.type).toBe("private_reply");
-    expect(privateReply!.payload).toEqual({
-      kind: "private_reply",
-      commentId: "c-1",
-      message: {
-        text: "Hey anna! Here you go 👇",
-        buttons: [{ type: "web_url", title: "Get the guide", url: "https://dm.test/l/abc123?c=user-1" }],
-      },
-    });
+    expect(privateReply!.payload).toEqual({ kind: "private_reply", mediaId: "media-1", commentId: "c-1", text: PROMPT });
     for (const action of [publicReply!, privateReply!]) {
       expect(action.status).toBe("pending");
       expect(action.send_at).toBeGreaterThanOrEqual(before + 60_000);
@@ -86,65 +67,71 @@ describe("POST /webhook: comments", () => {
 
   it("queues only the DM when the rule has no public replies", async () => {
     await seedRule({ public_replies: [] });
-    await postWebhook(commentPayload());
+    await postWebhook(commentEvent());
     expect((await actions()).map((a) => a.type)).toEqual(["private_reply"]);
   });
 
-  it("sends plain text when the rule has no link", async () => {
-    await insertRule(testEnv.DB, newRule(), Date.now());
-    await postWebhook(commentPayload({ username: "" }));
-    const [dm] = await actions();
-    expect(dm!.payload).toEqual({ kind: "private_reply", commentId: "c-1", message: { text: "Hey there! Here you go 👇" } });
+  it("needs no follow-up when the rule has no link", async () => {
+    await insertRule(testEnv.DB, newRule({ opening_text: "Thanks {name}!" }), Date.now());
+    await postWebhook(commentEvent({ username: "" }));
+    expect((await actions())[0]!.payload).toEqual({ kind: "private_reply", mediaId: "media-1", commentId: "c-1", text: "Thanks there!" });
+    expect(await linkState()).toBe("none");
   });
 
-  it("does nothing for a comment without a keyword, but remembers it", async () => {
+  it("does nothing for a comment without a keyword, but remembers the event", async () => {
     await seedRule();
-    await postWebhook(commentPayload({ text: "love this" }));
+    await postWebhook(commentEvent({ text: "love this" }));
     expect(await count("actions")).toBe(0);
     expect(await count("processed_events")).toBe(1);
   });
 
-  it("ignores the creator's own comments", async () => {
+  it("ignores comments by the creator's own account", async () => {
     await seedRule();
-    await postWebhook(commentPayload({ fromId: IG_USER_ID, text: "guide is in bio" }));
+    await postWebhook(commentEvent({ commentId: "c-own-1", isOwn: true }));
+    await postWebhook(commentEvent({ commentId: "c-own-2", fromId: "someone", username: "Creator" }));
     expect(await count("actions")).toBe(0);
   });
 
-  it("sends one DM when Meta delivers the same webhook twice", async () => {
+  it("sends one DM when Zernio delivers the same event twice", async () => {
     await seedRule();
-    await postWebhook(commentPayload());
-    await postWebhook(commentPayload());
+    const event = commentEvent();
+    await postWebhook(event);
+    await postWebhook(event);
     expect(await count("triggers")).toBe(1);
     expect(await count("actions")).toBe(2);
   });
 
   it("sends one DM when the same person comments the keyword again on the same post", async () => {
     await seedRule();
-    await postWebhook(commentPayload({ commentId: "c-1" }));
-    await postWebhook(commentPayload({ commentId: "c-2", text: "GUIDE!!" }));
+    await postWebhook(commentEvent({ commentId: "c-1" }));
+    await postWebhook(commentEvent({ commentId: "c-2", text: "GUIDE!!" }));
     expect(await count("triggers")).toBe(1);
     expect(await count("actions")).toBe(2);
   });
 
-  it("finishes a delivery that failed halfway when Meta retries", async () => {
+  it("finishes a delivery that failed halfway when Zernio retries", async () => {
     const rule = await seedRule();
     // State left by a first delivery that crashed after saving the trigger and the public reply.
     const triggerId = await insertTrigger(testEnv.DB, {
       rule_id: rule.id, contact_igsid: "user-1", media_id: "media-1", source: "comment",
-      comment_id: "c-1", comment_at: Date.now(), created_at: Date.now(),
+      comment_id: "c-1", comment_at: Date.now(), created_at: Date.now(), link_state: "awaiting_reply",
     });
     await enqueueAction(testEnv.DB, {
       triggerId, contactIgsid: "user-1", sendAt: Date.now(),
-      payload: { kind: "public_reply", commentId: "c-1", text: "Sent!" },
+      payload: { kind: "public_reply", mediaId: "media-1", commentId: "c-1", text: "Sent!" },
     }, Date.now());
 
-    await postWebhook(commentPayload());
+    await postWebhook(commentEvent());
     expect((await actions()).map((a) => a.type)).toEqual(["public_reply", "private_reply"]);
   });
 
-  it("records when the last webhook arrived, even with no events", async () => {
-    const res = await postWebhook(messagingPayload([]));
+  it("acknowledges events it doesn't act on and records the time", async () => {
+    const res = await postWebhook({ id: "evt-read", event: "message.read" });
     expect(res.status).toBe(200);
     expect(Number(await getSetting(testEnv.DB, "last_webhook_at"))).toBeGreaterThan(0);
+  });
+
+  it("rejects a body that isn't JSON", async () => {
+    expect((await postWebhookRaw("not json")).status).toBe(400);
   });
 });

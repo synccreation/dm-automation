@@ -1,9 +1,13 @@
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { vi } from "vitest";
 import type { AppEnv } from "../src/env";
+import { app } from "../src/index";
+import { hmacSha256Hex } from "../src/webhook/verify";
+import { ACCOUNT_ID, PROFILE_ID } from "./fixtures";
 
+export { ACCOUNT_ID, PROFILE_ID };
 export const testEnv = env as unknown as AppEnv;
-export const IG_USER_ID = "17840000000000001";
 
 // Child tables first so foreign keys never block the delete.
 const TABLES = [
@@ -57,8 +61,9 @@ export function stubGlobalFetch(handler: (call: FetchCall) => Response | Promise
 
 export async function seedConnectedAccount(): Promise<void> {
   const rows: [string, string][] = [
-    ["ig_access_token", "test-token"],
-    ["ig_user_id", IG_USER_ID],
+    ["zernio_account_id", ACCOUNT_ID],
+    ["zernio_profile_id", PROFILE_ID],
+    ["zernio_webhook_id", "wh-1"],
     ["ig_username", "creator"],
   ];
   await testEnv.DB.batch(
@@ -66,4 +71,20 @@ export async function seedConnectedAccount(): Promise<void> {
       testEnv.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").bind(key, value),
     ),
   );
+}
+
+/** POSTs a signed Zernio delivery and waits for any work it deferred with waitUntil. */
+export async function postWebhookRaw(raw: string, secret = "test-webhook-secret"): Promise<Response> {
+  const ctx = createExecutionContext();
+  const res = await app.request("/webhook", {
+    method: "POST",
+    body: raw,
+    headers: { "Content-Type": "application/json", "X-Zernio-Signature": await hmacSha256Hex(secret, raw) },
+  }, testEnv, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+export function postWebhook(body: unknown, secret?: string): Promise<Response> {
+  return postWebhookRaw(JSON.stringify(body), secret);
 }

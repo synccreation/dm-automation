@@ -24,7 +24,8 @@ export function privacyPage(email: string): string {
 <p>When you comment on or message the account, we store your Instagram username, your Instagram-scoped user ID,
 the messages you exchange with the account, and whether you opened links we sent you. We use this only to reply
 to you and to measure how many people open those links. We do not sell or share this data.</p>
-<p>Data is stored with Cloudflare. To have your data deleted, see <a href="/data-deletion">data deletion</a>
+<p>Messages are sent and received through Zernio (Zernio Software SL), our Instagram messaging provider,
+and stored with Cloudflare. To have your data deleted, see <a href="/data-deletion">data deletion</a>
 or email <a href="mailto:${mail}">${mail}</a>.</p>`);
 }
 

@@ -1,66 +1,80 @@
-import { IG_USER_ID } from "./helpers";
+export const ACCOUNT_ID = "66b2e19d8c3f5a7e9d0b1c2d";
+export const PROFILE_ID = "66a1f0c2a4b9d3e8f1a2b3c4";
 
-export function commentPayload(o: {
-  commentId?: string; text?: string; fromId?: string; username?: string; mediaId?: string;
+let counter = 0;
+const nextEventId = () => `evt-${++counter}`;
+const account = { id: ACCOUNT_ID, accountId: ACCOUNT_ID, profileId: PROFILE_ID, platform: "instagram", username: "creator" };
+
+export function commentEvent(o: {
+  eventId?: string; commentId?: string; mediaId?: string; text?: string; fromId?: string; username?: string; isOwn?: boolean;
 } = {}) {
   return {
-    object: "instagram",
-    entry: [{
-      id: IG_USER_ID,
-      time: 1_727_500_000,
-      changes: [{
-        field: "comments",
-        value: {
-          id: o.commentId ?? "c-1",
-          from: { id: o.fromId ?? "user-1", username: o.username ?? "anna" },
-          text: o.text ?? "GUIDE please",
-          media: { id: o.mediaId ?? "media-1", media_product_type: "REELS" },
-        },
-      }],
-    }],
-  };
-}
-
-export function messagingPayload(messaging: Record<string, unknown>[]) {
-  return { object: "instagram", entry: [{ id: IG_USER_ID, time: 1_727_500_000_000, messaging }] };
-}
-
-export function textMessage(o: { mid?: string; senderId?: string; text?: string } = {}) {
-  return {
-    sender: { id: o.senderId ?? "user-1" },
-    recipient: { id: IG_USER_ID },
-    timestamp: 1_727_500_000_000,
-    message: { mid: o.mid ?? "m-1", text: o.text ?? "hello" },
-  };
-}
-
-export function storyReply(o: { mid?: string; senderId?: string; text?: string; storyId?: string } = {}) {
-  return {
-    sender: { id: o.senderId ?? "user-1" },
-    recipient: { id: IG_USER_ID },
-    timestamp: 1_727_500_000_000,
-    message: {
-      mid: o.mid ?? "m-story",
-      text: o.text ?? "GUIDE",
-      reply_to: { story: { url: "https://cdn.example/story.jpg", id: o.storyId ?? "story-1" } },
+    id: o.eventId ?? nextEventId(),
+    event: "comment.received",
+    comment: {
+      id: o.commentId ?? "c-1",
+      postId: null,
+      platformPostId: o.mediaId ?? "media-1",
+      platform: "instagram",
+      text: o.text ?? "GUIDE please",
+      createdAt: "2026-09-28T12:00:00Z",
+      isReply: false,
+      parentCommentId: null,
+      author: { id: o.fromId ?? "user-1", username: o.username ?? "anna", name: "Anna", ...(o.isOwn ? { isOwnAccount: true } : {}) },
     },
+    post: { id: "p-1", platformPostId: o.mediaId ?? "media-1", content: null, permalink: "https://instagram.com/p/x" },
+    account,
+    timestamp: "2026-09-28T12:00:01Z",
   };
 }
 
-export function echoMessage(o: { mid?: string; recipientId?: string; text?: string } = {}) {
+export function messageEvent(o: {
+  eventId?: string; messageId?: string; conversationId?: string; senderId?: string; username?: string; text?: string;
+  storyId?: string; postbackPayload?: string;
+} = {}) {
+  const metadata = {
+    ...(o.storyId ? { storyReply: { storyId: o.storyId, storyUrl: "https://cdn.example/s.jpg" } } : {}),
+    ...(o.postbackPayload ? { postbackPayload: o.postbackPayload, postbackTitle: "Tap" } : {}),
+  };
   return {
-    sender: { id: IG_USER_ID },
-    recipient: { id: o.recipientId ?? "user-1" },
-    timestamp: 1_727_500_000_000,
-    message: { mid: o.mid ?? "m-echo", text: o.text ?? "thanks!", is_echo: true },
+    id: o.eventId ?? nextEventId(),
+    event: "message.received",
+    message: {
+      id: "internal-1",
+      conversationId: o.conversationId ?? "conv-1",
+      platform: "instagram",
+      platformMessageId: o.messageId ?? "mid-1",
+      direction: "incoming",
+      text: o.text ?? "send it",
+      attachments: [],
+      sender: { id: o.senderId ?? "user-1", username: o.username ?? "anna", name: "Anna" },
+      sentAt: "2026-09-28T12:05:00.000Z",
+      isRead: false,
+      sentVia: null,
+    },
+    conversation: { id: o.conversationId ?? "conv-1", platformConversationId: o.senderId ?? "user-1", participantId: o.senderId ?? "user-1", status: "active" },
+    account,
+    metadata: Object.keys(metadata).length > 0 ? metadata : null,
+    timestamp: "2026-09-28T12:05:01Z",
   };
 }
 
-export function postbackEvent(o: { mid?: string; senderId?: string; payload?: string } = {}) {
+export function sentEvent(o: { eventId?: string; messageId?: string; recipientId?: string; text?: string; sentVia?: string | null } = {}) {
   return {
-    sender: { id: o.senderId ?? "user-1" },
-    recipient: { id: IG_USER_ID },
-    timestamp: 1_727_500_000_000,
-    postback: { mid: o.mid ?? "m-pb", title: "Get the guide", payload: o.payload ?? "GET:1" },
+    id: o.eventId ?? nextEventId(),
+    event: "message.sent",
+    message: {
+      id: "internal-2",
+      conversationId: "conv-1",
+      platform: "instagram",
+      platformMessageId: o.messageId ?? "mid-out",
+      direction: "outgoing",
+      text: o.text ?? "thanks!",
+      sender: { id: ACCOUNT_ID },
+      sentVia: o.sentVia === undefined ? null : o.sentVia,
+    },
+    conversation: { id: "conv-1", participantId: o.recipientId ?? "user-1", status: "active" },
+    account,
+    timestamp: "2026-09-28T12:06:00Z",
   };
 }

@@ -1,11 +1,8 @@
 export type SettingKey =
-  | "ig_access_token"
-  | "ig_token_refreshed_at"
-  | "ig_token_error"
-  | "ig_user_id"
+  | "zernio_account_id"
+  | "zernio_profile_id"
+  | "zernio_webhook_id"
   | "ig_username"
-  | "oauth_state"
-  | "webhook_subscription_error"
   | "last_webhook_at"
   | "last_sweep_at";
 
