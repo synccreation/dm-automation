@@ -8,7 +8,7 @@ export type CliParse = { ok: true; request: CliRequest } | { ok: false; error: s
 
 export const USAGE = `Usage: npm run cli -- <command>
 
-  connect                               Print the Instagram login link
+  setup [accountId]                     Link your Zernio Instagram account and register the webhook
   health                                Connection and queue status
   media                                 Recent posts and reels with their IDs
   actions                               The 20 most recent sends, with errors
@@ -34,8 +34,8 @@ function jsonFlag(args: string[]): { ok: true; value: unknown } | { ok: false; e
 export function parseCli(argv: string[]): CliParse {
   const [command, sub, ...rest] = argv;
   switch (command) {
-    case "connect":
-      return request("POST", "/admin/auth/start");
+    case "setup":
+      return request("POST", "/admin/setup", sub === undefined ? {} : { accountId: sub });
     case "health":
       return request("GET", "/admin/health");
     case "media":

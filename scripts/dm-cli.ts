@@ -58,10 +58,6 @@ async function main(): Promise<void> {
     // not JSON; print as-is
   }
 
-  if (response.ok && path === "/admin/auth/start" && typeof output === "object" && output !== null && "url" in output) {
-    console.log(`Open this link in your browser and approve access:\n\n${String(output.url)}\n`);
-    return;
-  }
   console.log(typeof output === "string" ? output : JSON.stringify(output, null, 2));
   if (!response.ok) process.exit(1);
 }

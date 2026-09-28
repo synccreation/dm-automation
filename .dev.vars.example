@@ -1,5 +1,4 @@
 # For `npm run dev` (wrangler dev). Copy to .dev.vars (never committed).
-IG_APP_ID=
-IG_APP_SECRET=
-WEBHOOK_VERIFY_TOKEN=
+ZERNIO_API_KEY=
+ZERNIO_WEBHOOK_SECRET=
 ADMIN_TOKEN=

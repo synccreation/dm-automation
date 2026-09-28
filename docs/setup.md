@@ -1,78 +1,53 @@
 # Setup
 
 You need:
-- an Instagram **Business or Creator** account (the one to automate)
+- an Instagram **Business or Creator** account
 - a second Instagram account for testing
-- a Facebook login for developers.facebook.com
 - a free Cloudflare account
-- Node.js 24 or newer. Run `npm install` once in this folder before anything below.
+- a free Zernio account
+- Node.js 24+, with `npm install` run once in this folder
 
-Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for the value interactively. If that prompt hangs in Git Bash, pipe the value in instead, for example `printf '%s' 'the-value' | npx wrangler secret put NAME`.
+Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for the value. If that prompt hangs in Git Bash, pipe the value in instead: `printf '%s' 'the-value' | npx wrangler secret put NAME`.
 
-## 1. Cloudflare
+## 1. Cloudflare (one time)
 
-1. Log in to Cloudflare: `npx wrangler login` (a browser window opens).
+1. Run `npx wrangler login`.
 2. Create the database: `npx wrangler d1 create dm-automation`, then copy the printed `database_id` into `wrangler.jsonc`.
-3. Create the tables: `npx wrangler d1 migrations apply dm-automation --remote`
-4. Deploy once to get your URL: `npm run deploy`. Note the `https://dm-automation.<subdomain>.workers.dev` URL.
-5. In `wrangler.jsonc`, set `PUBLIC_URL` to that URL (no trailing slash) and `CONTACT_EMAIL` to the address shown on your privacy page. Then run `npm run deploy` again.
-6. Generate two random secrets. Run `node -e "console.log(crypto.randomUUID() + crypto.randomUUID())"` twice.
-7. Store them:
-   - `npx wrangler secret put ADMIN_TOKEN` (paste the first value)
-   - `npx wrangler secret put WEBHOOK_VERIFY_TOKEN` (paste the second value)
-8. Copy `.env.example` to `.env`, then set `DM_WORKER_URL` to your URL and `DM_ADMIN_TOKEN` to the first value.
-9. Check it: `npm run cli -- health` should print `"connected": false`.
+3. Deploy: `npm run deploy`. In `wrangler.jsonc`, set `PUBLIC_URL` to the printed `workers.dev` URL and `CONTACT_EMAIL` to your address, then deploy again.
+4. Set the secrets (both are random values you generate):
+   - `ADMIN_TOKEN`
+   - `ZERNIO_WEBHOOK_SECRET`
 
-## 2. Meta app
+   Generate each with `node -e "console.log(crypto.randomUUID() + crypto.randomUUID())"`.
+5. Copy `.env.example` to `.env`, then fill in `DM_WORKER_URL` and `DM_ADMIN_TOKEN`.
 
-1. At developers.facebook.com, go to **My Apps → Create app**. Pick the use case **"Manage messaging & content on Instagram"** (Instagram API with Instagram Login) and finish the wizard.
-2. Open **Instagram → API setup with Instagram login**. Copy the **Instagram app ID** and **Instagram app secret**:
-   - `npx wrangler secret put IG_APP_ID`
-   - `npx wrangler secret put IG_APP_SECRET`
+## 2. Zernio
 
-   Then open **App settings → Basic** and copy the (Meta) **App secret** too: `npx wrangler secret put META_APP_SECRET`. Meta signs webhooks with one of these two secrets; storing both means it doesn't matter which.
-3. Add yourself as a tester:
-   - Go to **App roles → Roles → Instagram testers**, and add your Business/Creator username.
-   - Then, **in a desktop browser**, go to instagram.com → Settings → Apps and websites → **Tester invites** → Accept. The invite can't be accepted on a phone.
-4. Set up the login redirect. Under **Set up Instagram business login → Business login settings**, add the OAuth redirect URI `https://<your-url>/auth/callback` exactly, with no trailing slash.
-5. Configure the webhook:
-   - **Callback URL:** `https://<your-url>/webhook`
-   - **Verify token:** the `WEBHOOK_VERIFY_TOKEN` value
-   - Click **Verify and save**.
-   - Subscribe to `comments`, `messages` and `messaging_postbacks`.
-6. Fill in **App settings → Basic**:
-   - Privacy policy URL: `https://<your-url>/privacy`
-   - Terms of service URL: `https://<your-url>/terms`
-   - User data deletion: `https://<your-url>/data-deletion`
-   - A category
-   - If asked, an app icon (any 1024×1024 image)
-7. **Publish** the app (switch it to Live). In Development mode, only the dashboard's "Test" button delivers webhooks.
-8. In the **Instagram app** on your phone, go to Settings → Messages and story replies → Message controls → **Connected tools → Allow access to messages**, and turn it on.
+1. Sign up at zernio.com (free, no card needed).
+2. Connect your Instagram account and choose **Instagram login**. No Facebook is needed.
+3. Create an API key under Dashboard → API keys, then run `npx wrangler secret put ZERNIO_API_KEY`.
 
-## 3. Connect and create a test rule
+## 3. Link them
 
-1. Run `npm run cli -- connect`, open the printed link, and approve. The page should say "Connected as @you".
-   If the page says **"Connected, but webhooks are off"**, the login worked but Meta refused the webhook subscription. Recheck step 2.5, then connect again.
-2. Run `npm run cli -- health`. It should show `"connected": true` and `"subscriptionError": null`.
-3. Run `npm run cli -- media` and copy the `id` of the post you'll test on.
-4. Create the rule from a file, which keeps emoji intact on Windows:
-   - Copy `docs/examples/go-no-go-rule.json` to `rule.json` in this folder.
-   - Replace `<MEDIA_ID>` with the id from step 3.
-   - Run `npm run cli -- rules add --file rule.json`.
+1. Apply any new database changes: `npx wrangler d1 migrations apply dm-automation --remote`
+2. Deploy: `npm run deploy`
+3. Link: `npm run cli -- setup`. It prints your Instagram username and the webhook id. If several accounts are connected, it lists them. Run `npm run cli -- setup <id>` with the one to use.
+4. Check: `npm run cli -- health` should show `"connected": true` and `"webhookRegistered": true`.
 
-## 4. Go/no-go test
+## 4. Test rule and live test
 
-1. From the **second account** (which has **no role** on the Meta app), comment `guide` on the test post.
-2. Wait 1–2 minutes. Check:
+1. Run `npm run cli -- media` and copy the `id` of the post you'll test on.
+2. Copy `docs/examples/go-no-go-rule.json` to `rule.json`, replace `<MEDIA_ID>` with that id, then run `npm run cli -- rules add --file rule.json`.
+3. From the **second account**, comment `guide` on that post.
+4. Within about 1–2 minutes, check that:
    - a public reply appears under the comment
-   - a DM arrives in the second account's Requests folder, with an **Open the guide** button
-3. Tap the button. It should open your link, and `npm run cli -- actions` should show both actions as `sent`.
+   - a DM arrives (in Requests, if the second account doesn't follow you) asking them to reply
+5. Reply to that DM from the second account. The **Open the guide** button should arrive within seconds.
+6. Tap it. `npm run cli -- actions` should show every action as `sent`.
 
-**Result:**
-- **DM and reply arrived:** GO. Automating your own account works without App Review. Continue to milestone 2.
-- **`actions` shows errors about permissions or "Advanced Access":** NO-GO. Stop and decide between App Review, a connection provider (Zernio), or a hosted tool.
-- **`actions` shows an error mentioning the template, attachment or button:** the access model works. Only the DM's button format was refused, so it's still a GO. Ask Claude to send the link as plain text instead.
-- **Nothing happens:** run `npx wrangler tail` in a second terminal, then comment again from the second account.
-  - **The tail shows `"webhook":"rejected"`:** Meta is delivering, but the signing secret doesn't match. Recheck `IG_APP_SECRET` and `META_APP_SECRET` (step 2.2).
-  - **The tail shows nothing at all:** Meta isn't delivering. Recheck that the app is Live (step 2.7), that you're subscribed to `comments` (step 2.5), the callback URL, and `subscriptionError` in `npm run cli -- health`.
-  - **The tail shows errors:** send them to Claude.
+**If nothing happens:**
+- If `npm run cli -- health` still shows `lastWebhookAt: null`, open Zernio's dashboard → Webhooks → logs. Failed deliveries show there with the response the Worker gave.
+- Run `npx wrangler tail`, then comment again:
+  - `"webhook":"rejected"` means the secrets don't match. Run `npm run cli -- setup` again.
+  - Anything else showing errors: send it to Claude.
+- If `npm run cli -- actions` shows `failed` with an Instagram reason, that reason is quoted there. Send it to Claude.
