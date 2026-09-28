@@ -1,14 +1,18 @@
-import { enqueueActionOnce } from "../db/actions";
+import { enqueueAction, enqueueActionOnce } from "../db/actions";
 import { upsertContact } from "../db/contacts";
-import { findTriggerId, insertTrigger, isProcessed, markProcessed } from "../db/events";
-import { listActiveRules, type RuleRow } from "../db/rules";
+import { claimAwaitingTriggers, findTriggerId, insertTrigger, isProcessed, markProcessed } from "../db/events";
+import { getLinkById } from "../db/links";
+import { getRule, listActiveRules, type RuleRow } from "../db/rules";
 import { getSetting } from "../db/settings";
 import type { AppEnv } from "../env";
+import { trackedUrl } from "../links";
 import { fillTemplate, findMatchingRule } from "../rules";
-import { openingSendAt } from "../time";
+import { sendActionNow } from "../scheduler";
+import { DAY, openingSendAt } from "../time";
 import type { WebhookEvent } from "./parse";
 
 type CommentEvent = Extract<WebhookEvent, { kind: "comment" }>;
+type MessageEvent = Extract<WebhookEvent, { kind: "message" }>;
 
 export interface HandleOptions {
   now: number;
@@ -17,10 +21,14 @@ export interface HandleOptions {
   defer: (task: Promise<unknown>) => void;
 }
 
+const LINK_WINDOW_MS = 7 * DAY;
+const DEFAULT_LINK_TEXT = "Here you go 👇";
+
 export async function handleEvent(env: AppEnv, event: WebhookEvent, options: HandleOptions): Promise<void> {
   const key = `event:${event.eventId}`;
   if (await isProcessed(env.DB, key)) return;
   if (event.kind === "comment") await handleComment(env, event, options);
+  if (event.kind === "message") await handleMessage(env, event, options);
   // Echoes feed the milestone 2 inbox. Marked last: if anything above throws, Zernio
   // redelivers (same event id) and the retry only fills in what the failed attempt missed.
   await markProcessed(env.DB, key, options.now);
@@ -66,4 +74,28 @@ async function triggerCommentRule(
       text: fillTemplate(rule.opening_text, { name: event.fromUsername ?? "there" }),
     },
   }, now);
+}
+
+async function handleMessage(env: AppEnv, event: MessageEvent, options: HandleOptions): Promise<void> {
+  // Replying opened the conversation, so buttons are allowed now: send each waiting link.
+  const triggers = await claimAwaitingTriggers(env.DB, event.senderId, options.now - LINK_WINDOW_MS);
+  for (const trigger of triggers) {
+    const rule = await getRule(env.DB, trigger.rule_id);
+    const link = rule?.link_id != null ? await getLinkById(env.DB, rule.link_id) : null;
+    if (!rule || !link) continue;
+    const actionId = await enqueueAction(env.DB, {
+      triggerId: trigger.id, contactIgsid: event.senderId, sendAt: options.now,
+      payload: {
+        kind: "dm",
+        conversationId: event.conversationId,
+        message: {
+          text: rule.link_text || DEFAULT_LINK_TEXT,
+          buttons: [{ type: "web_url", title: rule.button_label, url: trackedUrl(env.PUBLIC_URL, link.code, event.senderId) }],
+        },
+      },
+    }, options.now);
+    // Queued first, then sent at once; if the immediate send fails or never runs,
+    // the minute scheduler picks the queued action up.
+    options.defer(sendActionNow(env, actionId, options.now));
+  }
 }
