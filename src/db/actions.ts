@@ -49,6 +49,21 @@ export async function enqueueAction(db: D1Database, action: NewAction, now: numb
   return row.id;
 }
 
+/**
+ * Like enqueueAction, but a no-op (returns null) when the trigger already has an
+ * action of this type, per the actions_one_per_trigger unique index.
+ */
+export async function enqueueActionOnce(db: D1Database, action: NewAction, now: number): Promise<number | null> {
+  const row = await db
+    .prepare(
+      `INSERT OR IGNORE INTO actions (type, trigger_id, contact_igsid, payload, send_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+    )
+    .bind(action.payload.kind, action.triggerId, action.contactIgsid, JSON.stringify(action.payload), action.sendAt, now)
+    .first<{ id: number }>();
+  return row?.id ?? null;
+}
+
 /** Atomically moves due actions to 'sending' (one UPDATE…RETURNING), so no action is claimed twice. */
 export async function claimDueActions(
   db: D1Database, now: number, types: ActionType[], limit: number,

@@ -5,6 +5,9 @@ You need:
 - a second Instagram account for testing
 - a Facebook login for developers.facebook.com
 - a free Cloudflare account
+- Node.js 24 or newer. Run `npm install` once in this folder before anything below.
+
+Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for the value interactively. If that prompt hangs in Git Bash, pipe the value in instead, for example `printf '%s' 'the-value' | npx wrangler secret put NAME`.
 
 ## 1. Cloudflare
 
@@ -23,9 +26,11 @@ You need:
 ## 2. Meta app
 
 1. At developers.facebook.com, go to **My Apps → Create app**. Pick the use case **"Manage messaging & content on Instagram"** (Instagram API with Instagram Login) and finish the wizard.
-2. Open **Instagram → API setup with Instagram login**. Copy the **Instagram app ID** and **Instagram app secret** (not the Facebook app ones):
+2. Open **Instagram → API setup with Instagram login**. Copy the **Instagram app ID** and **Instagram app secret**:
    - `npx wrangler secret put IG_APP_ID`
    - `npx wrangler secret put IG_APP_SECRET`
+
+   Then open **App settings → Basic** and copy the (Meta) **App secret** too: `npx wrangler secret put META_APP_SECRET`. Meta signs webhooks with one of these two secrets; storing both means it doesn't matter which.
 3. Add yourself as a tester:
    - Go to **App roles → Roles → Instagram testers**, and add your Business/Creator username.
    - Then, **in a desktop browser**, go to instagram.com → Settings → Apps and websites → **Tester invites** → Accept. The invite can't be accepted on a phone.
@@ -47,13 +52,13 @@ You need:
 ## 3. Connect and create a test rule
 
 1. Run `npm run cli -- connect`, open the printed link, and approve. The page should say "Connected as @you".
-2. Run `npm run cli -- health`. It should show `"connected": true`.
+   If the page says **"Connected, but webhooks are off"**, the login worked but Meta refused the webhook subscription. Recheck step 2.5, then connect again.
+2. Run `npm run cli -- health`. It should show `"connected": true` and `"subscriptionError": null`.
 3. Run `npm run cli -- media` and copy the `id` of the post you'll test on.
-4. Create the rule:
-
-   ```bash
-   npm run cli -- rules add --json '{"name":"Go/no-go test","keywords":["guide"],"scope":["<MEDIA_ID>"],"public_replies":["Sent! Check your DMs 👀","Just sent it 🙌"],"opening_text":"Hey {name}! Here is the guide 👇","button_label":"Open the guide","link_url":"https://example.com"}'
-   ```
+4. Create the rule from a file, which keeps emoji intact on Windows:
+   - Copy `docs/examples/go-no-go-rule.json` to `rule.json` in this folder.
+   - Replace `<MEDIA_ID>` with the id from step 3.
+   - Run `npm run cli -- rules add --file rule.json`.
 
 ## 4. Go/no-go test
 
@@ -66,6 +71,8 @@ You need:
 **Result:**
 - **DM and reply arrived:** GO. Automating your own account works without App Review. Continue to milestone 2.
 - **`actions` shows errors about permissions or "Advanced Access":** NO-GO. Stop and decide between App Review, a connection provider (Zernio), or a hosted tool.
-- **Nothing happens:**
-  - Check `npm run cli -- health`. If `lastWebhookAt` is still null, Meta isn't delivering. Recheck that the app is Live, that you're subscribed to `comments`, and the callback URL.
-  - Check `npx wrangler tail` for errors while you comment again.
+- **`actions` shows an error mentioning the template, attachment or button:** the access model works. Only the DM's button format was refused, so it's still a GO. Ask Claude to send the link as plain text instead.
+- **Nothing happens:** run `npx wrangler tail` in a second terminal, then comment again from the second account.
+  - **The tail shows `"webhook":"rejected"`:** Meta is delivering, but the signing secret doesn't match. Recheck `IG_APP_SECRET` and `META_APP_SECRET` (step 2.2).
+  - **The tail shows nothing at all:** Meta isn't delivering. Recheck that the app is Live (step 2.7), that you're subscribed to `comments` (step 2.5), the callback URL, and `subscriptionError` in `npm run cli -- health`.
+  - **The tail shows errors:** send them to Claude.

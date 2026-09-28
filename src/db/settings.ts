@@ -5,6 +5,7 @@ export type SettingKey =
   | "ig_user_id"
   | "ig_username"
   | "oauth_state"
+  | "webhook_subscription_error"
   | "last_webhook_at"
   | "last_sweep_at";
 

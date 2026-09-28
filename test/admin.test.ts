@@ -30,18 +30,22 @@ describe("GET /admin/health", () => {
     const res = await adminRequest("/health");
     expect(await res.json()).toEqual({
       connected: false, username: null, tokenRefreshedAt: null, tokenError: null,
-      lastWebhookAt: null, pendingActions: 0, failedLast24h: 0,
+      subscriptionError: null, lastWebhookAt: null, pendingActions: 0, failedLast24h: 0,
     });
   });
 
   it("reports connection, webhook time and queue counts", async () => {
     await seedConnectedAccount();
     await setSetting(testEnv.DB, "last_webhook_at", "1234");
+    await setSetting(testEnv.DB, "webhook_subscription_error", "Webhook subscription failed: nope");
     await enqueueAction(testEnv.DB, {
       triggerId: null, contactIgsid: "u1", sendAt: Date.now(), payload: { kind: "dm", igsid: "u1", message: { text: "x" } },
     }, Date.now());
     const body = (await (await adminRequest("/health")).json()) as Record<string, unknown>;
-    expect(body).toMatchObject({ connected: true, username: "creator", lastWebhookAt: 1234, pendingActions: 1 });
+    expect(body).toMatchObject({
+      connected: true, username: "creator", lastWebhookAt: 1234, pendingActions: 1,
+      subscriptionError: "Webhook subscription failed: nope",
+    });
   });
 });
 

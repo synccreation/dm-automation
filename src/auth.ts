@@ -63,7 +63,7 @@ export async function completeAuth(
   state: string,
   now: number,
   fetchFn: typeof fetch = (input, init) => fetch(input, init),
-): Promise<{ username: string }> {
+): Promise<{ username: string; subscriptionError: string | null }> {
   const stored = await getSetting(env.DB, "oauth_state");
   await deleteSetting(env.DB, "oauth_state"); // single-use
   const expected = stored ? (JSON.parse(stored) as { state: string; expiresAt: number }) : null;
@@ -102,18 +102,23 @@ export async function completeAuth(
   const igUserId = requireValue(me, "user_id", "profile lookup");
   const username = requireValue(me, "username", "profile lookup");
 
-  try {
-    await createInstagramClient({ accessToken, igUserId, version: env.GRAPH_API_VERSION, fetch: fetchFn })
-      .subscribeWebhooks(WEBHOOK_FIELDS);
-  } catch (err) {
-    if (err instanceof InstagramError) throw new AuthError(`Webhook subscription failed: ${err.message}`);
-    throw err;
-  }
-
+  // Store the connection before subscribing, so a refused subscription is
+  // reported (connect page + health) instead of throwing away a working login.
   await setSetting(env.DB, "ig_access_token", accessToken);
   await setSetting(env.DB, "ig_user_id", igUserId);
   await setSetting(env.DB, "ig_username", username);
   await setSetting(env.DB, "ig_token_refreshed_at", String(now));
   await deleteSetting(env.DB, "ig_token_error");
-  return { username };
+
+  try {
+    await createInstagramClient({ accessToken, igUserId, version: env.GRAPH_API_VERSION, fetch: fetchFn })
+      .subscribeWebhooks(WEBHOOK_FIELDS);
+  } catch (err) {
+    if (!(err instanceof InstagramError)) throw err;
+    const subscriptionError = `Webhook subscription failed: ${err.message}`;
+    await setSetting(env.DB, "webhook_subscription_error", subscriptionError);
+    return { username, subscriptionError };
+  }
+  await deleteSetting(env.DB, "webhook_subscription_error");
+  return { username, subscriptionError: null };
 }

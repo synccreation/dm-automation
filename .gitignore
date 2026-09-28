@@ -6,3 +6,6 @@ node_modules/
 !.env.example
 dist/
 coverage/
+
+# local copy of docs/examples/go-no-go-rule.json
+rule.json

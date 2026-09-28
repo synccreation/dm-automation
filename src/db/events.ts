@@ -37,6 +37,16 @@ export async function insertTrigger(db: D1Database, trigger: Omit<TriggerRow, "i
   return row?.id ?? null;
 }
 
+export async function findTriggerId(
+  db: D1Database, ruleId: number, contactIgsid: string, mediaId: string,
+): Promise<number | null> {
+  const row = await db
+    .prepare("SELECT id FROM triggers WHERE rule_id = ? AND contact_igsid = ? AND media_id = ?")
+    .bind(ruleId, contactIgsid, mediaId)
+    .first<{ id: number }>();
+  return row?.id ?? null;
+}
+
 export async function getTrigger(db: D1Database, id: number): Promise<TriggerRow | null> {
   return db.prepare("SELECT * FROM triggers WHERE id = ?").bind(id).first<TriggerRow>();
 }

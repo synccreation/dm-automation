@@ -50,12 +50,29 @@ describe("GET /auth/callback", () => {
     expect(await getSetting(testEnv.DB, "ig_username")).toBe("creator");
     expect(Number(await getSetting(testEnv.DB, "ig_token_refreshed_at"))).toBeGreaterThan(0);
     expect(await getSetting(testEnv.DB, "oauth_state")).toBeNull();
+    expect(await getSetting(testEnv.DB, "webhook_subscription_error")).toBeNull();
 
     const exchange = new URLSearchParams(calls[0]!.body!);
     expect(exchange.get("code")).toBe("abc");
     expect(exchange.get("redirect_uri")).toBe("https://dm.test/auth/callback");
     expect(exchange.get("grant_type")).toBe("authorization_code");
     expect(JSON.parse(calls[3]!.body!)).toEqual({ subscribed_fields: ["comments", "messages", "messaging_postbacks"] });
+  });
+
+  it("still connects, and says so, when the webhook subscription is refused", async () => {
+    const state = await stateFrom(await startAuth(testEnv, Date.now()));
+    stubGlobalFetch((call) =>
+      call.url.endsWith("/subscribed_apps")
+        ? jsonResponse({ error: { message: "Unsupported request", code: 100 } }, 400)
+        : metaHappyPath(call),
+    );
+    const res = await app.request(`/auth/callback?code=abc&state=${state}`, {}, testEnv);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("@creator");
+    expect(html).toContain("subscription failed");
+    expect(await getSetting(testEnv.DB, "ig_access_token")).toBe("long-token");
+    expect(await getSetting(testEnv.DB, "webhook_subscription_error")).toContain("Unsupported request");
   });
 
   it("rejects a wrong state without calling Meta, and states are single-use", async () => {

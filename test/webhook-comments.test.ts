@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import type { ActionRow } from "../src/db/actions";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enqueueAction, type ActionRow } from "../src/db/actions";
+import { insertTrigger } from "../src/db/events";
 import { insertLink } from "../src/db/links";
 import { insertRule, type NewRule } from "../src/db/rules";
 import { getSetting } from "../src/db/settings";
@@ -38,6 +39,7 @@ beforeEach(async () => {
   await resetDb();
   await seedConnectedAccount();
 });
+afterEach(() => vi.restoreAllMocks());
 
 describe("POST /webhook: comments", () => {
   it("rejects an invalid signature and stores nothing", async () => {
@@ -46,6 +48,12 @@ describe("POST /webhook: comments", () => {
     expect(res.status).toBe(401);
     expect(await count("actions")).toBe(0);
     expect(await count("processed_events")).toBe(0);
+  });
+
+  it("logs a rejected signature so wrangler tail shows why", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await postWebhook(commentPayload(), "wrong-secret");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("bad signature"));
   });
 
   it("queues a public reply and an opening DM about a minute out", async () => {
@@ -116,6 +124,22 @@ describe("POST /webhook: comments", () => {
     await postWebhook(commentPayload({ commentId: "c-2", text: "GUIDE!!" }));
     expect(await count("triggers")).toBe(1);
     expect(await count("actions")).toBe(2);
+  });
+
+  it("finishes a delivery that failed halfway when Meta retries", async () => {
+    const rule = await seedRule();
+    // State left by a first delivery that crashed after saving the trigger and the public reply.
+    const triggerId = await insertTrigger(testEnv.DB, {
+      rule_id: rule.id, contact_igsid: "user-1", media_id: "media-1", source: "comment",
+      comment_id: "c-1", comment_at: Date.now(), created_at: Date.now(),
+    });
+    await enqueueAction(testEnv.DB, {
+      triggerId, contactIgsid: "user-1", sendAt: Date.now(),
+      payload: { kind: "public_reply", commentId: "c-1", text: "Sent!" },
+    }, Date.now());
+
+    await postWebhook(commentPayload());
+    expect((await actions()).map((a) => a.type)).toEqual(["public_reply", "private_reply"]);
   });
 
   it("records when the last webhook arrived, even with no events", async () => {

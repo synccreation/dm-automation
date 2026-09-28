@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as actionsDb from "../src/db/actions";
 import { enqueueAction, getAction, type ActionPayload } from "../src/db/actions";
 import { insertTrigger } from "../src/db/events";
 import { insertRule } from "../src/db/rules";
@@ -32,6 +33,7 @@ const enqueue = (payload: ActionPayload, sendAt = NOW - 1, triggerId: number | n
   enqueueAction(testEnv.DB, { triggerId, contactIgsid: "u1", payload, sendAt }, NOW - 1);
 
 beforeEach(resetDb);
+afterEach(() => vi.restoreAllMocks());
 
 describe("runScheduler", () => {
   it("does nothing and loses nothing before Instagram is connected", async () => {
@@ -102,6 +104,28 @@ describe("runScheduler", () => {
     expect(report.dropped).toBe(1);
     expect(sent).toHaveLength(0);
     expect(await getAction(testEnv.DB, id)).toMatchObject({ status: "dropped" });
+  });
+
+  it("never resends a message that was delivered but could not be recorded", async () => {
+    const { ig, sent } = fakeIg();
+    const id = await enqueue(privateReply("c1"));
+    vi.spyOn(actionsDb, "markSent").mockRejectedValueOnce(new Error("D1 blip"));
+    await runScheduler(testEnv, NOW, { ig });
+    await runScheduler(testEnv, NOW + MINUTE, { ig });
+    expect(sent).toHaveLength(1);
+    expect(await getAction(testEnv.DB, id)).toMatchObject({ status: "sending" });
+  });
+
+  it("keeps working through the batch when one row's bookkeeping fails", async () => {
+    const { ig, sent } = fakeIg();
+    await enqueue(privateReply("c1"), NOW - 2);
+    const second = await enqueue(privateReply("c2"), NOW - 1);
+    vi.spyOn(actionsDb, "markSent").mockRejectedValueOnce(new Error("D1 blip"));
+    vi.spyOn(actionsDb, "markRetry").mockRejectedValueOnce(new Error("D1 blip"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await runScheduler(testEnv, NOW, { ig });
+    expect(sent).toHaveLength(2);
+    expect(await getAction(testEnv.DB, second)).toMatchObject({ status: "sent" });
   });
 
   it("fails actions stuck in sending for over 10 minutes", async () => {

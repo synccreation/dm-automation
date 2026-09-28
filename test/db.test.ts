@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  claimDueActions, countActions, enqueueAction, failStuckActions, getAction, markRetry, recentActions,
+  claimDueActions, countActions, enqueueAction, enqueueActionOnce, failStuckActions, getAction, markRetry, recentActions,
 } from "../src/db/actions";
 import { getContact, upsertContact } from "../src/db/contacts";
-import { getTrigger, insertTrigger, isProcessed, markProcessed } from "../src/db/events";
+import { findTriggerId, getTrigger, insertTrigger, isProcessed, markProcessed } from "../src/db/events";
 import { countClicks, getLinkByCode, insertClick, insertLink } from "../src/db/links";
 import { getRule, insertRule, listActiveRules, listRules, updateRule } from "../src/db/rules";
 import { deleteSetting, getSetting, setSetting } from "../src/db/settings";
@@ -84,6 +84,7 @@ describe("events and triggers", () => {
 
 describe("actions", () => {
   const dm = (igsid: string) => ({ kind: "dm" as const, igsid, message: { text: "hi" } });
+  const privateReplyPayload = { kind: "private_reply" as const, commentId: "c1", message: { text: "hi" } };
 
   it("claims only due actions of the requested types, up to the limit", async () => {
     const due1 = await enqueueAction(db(), { triggerId: null, contactIgsid: "u1", sendAt: NOW - 2, payload: dm("u1") }, NOW);
@@ -116,6 +117,31 @@ describe("actions", () => {
     expect(await getAction(db(), id)).toMatchObject({ status: "failed", last_error: "interrupted while sending" });
     expect(await countActions(db(), "failed")).toBe(1);
     expect(await countActions(db(), "failed", NOW + 10)).toBe(0);
+  });
+
+  it("enqueues at most one opening DM and one public reply per trigger", async () => {
+    const rule = await insertRule(db(), newRule(), NOW);
+    const triggerId = await insertTrigger(db(), {
+      rule_id: rule.id, contact_igsid: "u1", media_id: "m1", source: "comment",
+      comment_id: "c1", comment_at: NOW, created_at: NOW,
+    });
+    const reply = { triggerId, contactIgsid: "u1", sendAt: NOW, payload: privateReplyPayload };
+    expect(await enqueueActionOnce(db(), reply, NOW)).not.toBeNull();
+    expect(await enqueueActionOnce(db(), reply, NOW)).toBeNull();
+    // DMs are not limited: milestone 2 sends several per trigger (follow-gate prompts).
+    const followUp = { triggerId, contactIgsid: "u1", sendAt: NOW, payload: dm("u1") };
+    expect(await enqueueActionOnce(db(), followUp, NOW)).not.toBeNull();
+    expect(await enqueueActionOnce(db(), followUp, NOW)).not.toBeNull();
+  });
+
+  it("finds an existing trigger by rule, person and media", async () => {
+    const rule = await insertRule(db(), newRule(), NOW);
+    const id = await insertTrigger(db(), {
+      rule_id: rule.id, contact_igsid: "u1", media_id: "m1", source: "comment",
+      comment_id: "c1", comment_at: NOW, created_at: NOW,
+    });
+    expect(await findTriggerId(db(), rule.id, "u1", "m1")).toBe(id);
+    expect(await findTriggerId(db(), rule.id, "u2", "m1")).toBeNull();
   });
 
   it("lists recent actions newest first", async () => {

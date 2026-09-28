@@ -1,0 +1,9 @@
+{
+  "name": "Go/no-go test",
+  "keywords": ["guide"],
+  "scope": ["<MEDIA_ID>"],
+  "public_replies": ["Sent! Check your DMs 👀", "Just sent it 🙌"],
+  "opening_text": "Hey {name}! Here is the guide 👇",
+  "button_label": "Open the guide",
+  "link_url": "https://example.com"
+}

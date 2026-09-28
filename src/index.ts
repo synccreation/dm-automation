@@ -23,6 +23,12 @@ app.post("/webhook", async (c) => {
   const raw = await c.req.text();
   const secrets = [c.env.IG_APP_SECRET, c.env.META_APP_SECRET].filter((s): s is string => Boolean(s));
   if (!(await verifySignature(raw, c.req.header("X-Hub-Signature-256") ?? null, secrets))) {
+    // Logged, not stored: unauthenticated requests must not cost D1 writes. Shows up in `wrangler tail`.
+    console.warn(JSON.stringify({
+      webhook: "rejected",
+      reason: "bad signature",
+      hint: "IG_APP_SECRET (or META_APP_SECRET) does not match the secret Meta signs with",
+    }));
     return c.text("invalid signature", 401);
   }
   let body: unknown;
@@ -58,8 +64,15 @@ app.get("/auth/callback", async (c) => {
     return c.html(page("Connection failed", "<p>The login response was missing its code. Run <code>npm run cli -- connect</code> again.</p>"), 400);
   }
   try {
-    const { username } = await completeAuth(c.env, code, state, Date.now());
-    return c.html(page("Instagram connected", `<p>Connected as <strong>@${escapeHtml(username)}</strong>. You can close this tab.</p>`));
+    const { username, subscriptionError } = await completeAuth(c.env, code, state, Date.now());
+    const connected = `<p>Connected as <strong>@${escapeHtml(username)}</strong>.</p>`;
+    if (subscriptionError) {
+      return c.html(page("Connected, but webhooks are off", `${connected}
+<p>${escapeHtml(subscriptionError)}</p>
+<p>Comments won't trigger DMs until this is fixed. Check the webhook setup in your Meta app, then run
+<code>npm run cli -- connect</code> again.</p>`));
+    }
+    return c.html(page("Instagram connected", `${connected}<p>You can close this tab.</p>`));
   } catch (err) {
     if (err instanceof AuthError) return c.html(page("Connection failed", `<p>${escapeHtml(err.message)}</p>`), 400);
     throw err;

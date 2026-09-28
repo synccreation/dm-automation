@@ -37,7 +37,15 @@ export async function runScheduler(
     ...(await claimDueActions(env.DB, now, ["private_reply", "public_reply"], COMMENT_REPLY_BUDGET)),
     ...(await claimDueActions(env.DB, now, ["dm"], DM_BATCH)),
   ];
-  for (const action of due) await processAction(env, ig, action, now, report);
+  for (const action of due) {
+    try {
+      await processAction(env, ig, action, now, report);
+    } catch (err) {
+      // A failed bookkeeping write on one row must not strand the rest of the batch.
+      // The row stays 'sending' and is failed by failStuckActions, never resent.
+      console.error(JSON.stringify({ scheduler: "action error", actionId: action.id, error: String(err) }));
+    }
+  }
   return report;
 }
 
@@ -53,10 +61,9 @@ async function processAction(
     }
   }
 
+  let mid: string | null;
   try {
-    const mid = await executeAction(ig, action.payload);
-    await markSent(env.DB, action.id, mid, now);
-    report.sent++;
+    mid = await executeAction(ig, action.payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const transient = err instanceof InstagramError ? err.transient : true;
@@ -68,5 +75,10 @@ async function processAction(
       await markFailed(env.DB, action.id, message);
       report.failed++;
     }
+    return;
   }
+  // Outside the send's try: the message is already delivered, so a failed write
+  // here must never be treated as a send failure and retried.
+  await markSent(env.DB, action.id, mid, now);
+  report.sent++;
 }
