@@ -1,0 +1,5 @@
+# For `npm run dev` (wrangler dev). Copy to .dev.vars (never committed).
+IG_APP_ID=
+IG_APP_SECRET=
+WEBHOOK_VERIFY_TOKEN=
+ADMIN_TOKEN=
