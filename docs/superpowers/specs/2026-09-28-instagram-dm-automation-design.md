@@ -172,7 +172,9 @@ Echo events are outbound messages from the account.
 | `GET /admin/conversations/:igsid` | Bearer | Full thread |
 | `POST /admin/conversations/:igsid/reply` | Bearer | Send an approved reply (`text`, optional `button {label, url}`) |
 | `POST /admin/conversations/:igsid/done` | Bearer | Mark skipped |
-| `GET/POST/PATCH/DELETE /admin/rules` | Bearer | Rule management |
+| `GET/POST/PATCH /admin/rules` | Bearer | Rule management. Rules are paused with `PATCH {"active": false}` and never hard-deleted, because triggers reference them. |
+| `GET /admin/actions/recent` | Bearer | The 20 most recent actions with status and errors (debugging) |
+| `GET /privacy`, `/terms`, `/data-deletion` | none | Pages Meta requires before an app can go Live. They use the `CONTACT_EMAIL` var. |
 | `GET /admin/media` | Bearer | Recent posts, reels and stories with IDs and captions |
 | `GET /admin/stats` | Bearer | Aggregates |
 
@@ -211,7 +213,7 @@ Cloudflare's Free plan allows up to 5 cron triggers; this design uses 1 and deri
 
 ## 8. Security
 
-- **Secrets:** stored with `wrangler secret`: `IG_APP_SECRET`, `IG_APP_ID`, `WEBHOOK_VERIFY_TOKEN`, `ADMIN_TOKEN`. The access token lives in D1 `settings` because it is refreshed at runtime. Local `.env` and `.dev.vars` files are gitignored.
+- **Secrets:** stored with `wrangler secret`: `IG_APP_SECRET`, `IG_APP_ID`, `WEBHOOK_VERIFY_TOKEN`, `ADMIN_TOKEN`, and optionally `META_APP_SECRET`, which is accepted as a second webhook signing key. The access token lives in D1 `settings` because it is refreshed at runtime. Local `.env` and `.dev.vars` files are gitignored.
 - **Webhook authentication:** webhooks without a valid signature are rejected with 401 and nothing is stored.
 - **Untrusted content:** DM content is treated as untrusted in the skill (see guardrails, §5.6). The Worker never executes content.
 - **Sending rules:** the Worker enforces the 24-hour window and the 7-day private-reply cutoff at send time, regardless of what the client requests.
