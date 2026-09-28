@@ -1,7 +1,38 @@
 # Instagram DM Automation — Design Spec
 
 **Date:** 2026-09-28
-**Status:** Approved in conversation, pending written-spec review
+**Status:** Approved. Amendment A approved 2026-09-28.
+
+## Amendment A (2026-09-28): Zernio instead of a direct Meta app
+
+**Why.** Facebook locked the creator's account behind an identity check tied to a phone number they no longer have. Without Facebook there is no Meta developer app. Zernio (Zernio Software SL, Spain; SOC 2 Type II; official Meta API) connects Instagram through Instagram Login, with no Facebook involved. Research notes: `docs/research/zernio-api.md`.
+
+**What changes.**
+- **Transport.** Every Instagram call goes through Zernio's REST API (`https://zernio.com/api/v1`, `Authorization: Bearer ZERNIO_API_KEY`).
+  - Webhooks come from Zernio: `comment.received`, `message.received` and `message.sent`.
+  - Each is signed with `X-Zernio-Signature`, the lowercase hex HMAC-SHA256 of the raw body, keyed by `ZERNIO_WEBHOOK_SECRET`.
+  - Events are deduplicated by their event id. The Worker must answer within 5 s, so any sending happens after the response (`ctx.waitUntil`).
+- **Setup.** There is no Meta app, no OAuth and no App Review. `npm run cli -- setup` picks the Instagram account connected in Zernio, stores its ids, and creates or updates the Zernio webhook for this Worker.
+- **Link delivery (supersedes §5.1 step 5 and §5.2's button flow).**
+  - Since late August 2026, Instagram refuses buttons in a private reply to a non-follower, and the refused call still uses up the comment's single private reply.
+  - So the opening DM is **plain text** asking the commenter to reply.
+  - When they reply, the link DM with a URL button goes out **immediately**. It is queued first, so the scheduler retries it if the immediate send fails.
+  - A trigger's `link_state` moves `none | awaiting_reply → delivered`. Links are sent only for triggers from the last 7 days.
+- **Rule fields.**
+  - `opening_text` is the plain-text prompt.
+  - `link_text` (default "Here you go 👇") and `button_label` make up the follow-up link DM.
+  - `link_button_label` is reserved for the milestone 2 follow gate.
+- **Limits.** The Zernio free plan allows 60 API calls a minute, so the scheduler sends at most 12 comment replies and 20 DMs per run. The first 10,000 outbound DMs a month are free, and each lead uses about 2.
+- **Superseded parts of this spec:**
+  - §2 rows "Meta Instagram API with Instagram Login, Standard Access" and "Links sent as buttons"
+  - §6.1 routes `GET /webhook`, `/admin/auth/start` and `/auth/callback` (replaced by `POST /admin/setup`)
+  - §6.2 (the Graph API endpoint list)
+  - §8's Meta secrets (replaced by `ZERNIO_API_KEY` and `ZERNIO_WEBHOOK_SECRET`)
+  - §9 rollout steps 1–2 (the Meta app and the go/no-go test are replaced by the Zernio setup and a live test)
+- **Milestone 2 notes.**
+  - Follow status comes from Zernio's follow-status endpoint and is known once the person has messaged the account.
+  - Story replies arrive in `message.received` `metadata.storyReply`.
+  - Echoes arrive as `message.sent`; `sentVia: null` means the creator typed the message in the Instagram app. This needs a live check.
 
 ## 1. Goal
 
