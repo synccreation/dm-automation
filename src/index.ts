@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { admin } from "./admin";
+import { AuthError, completeAuth } from "./auth";
 import { setSetting } from "./db/settings";
 import type { AppEnv } from "./env";
 import { handleLinkRedirect } from "./links";
-import { dataDeletionPage, privacyPage, termsPage } from "./pages";
+import { dataDeletionPage, escapeHtml, page, privacyPage, termsPage } from "./pages";
 import { runScheduler } from "./scheduler";
 import { handleEvents } from "./webhook/handle";
 import { parseWebhook } from "./webhook/parse";
@@ -43,6 +44,27 @@ app.get("/l/:code", (c) =>
 app.get("/privacy", (c) => c.html(privacyPage(c.env.CONTACT_EMAIL)));
 app.get("/terms", (c) => c.html(termsPage(c.env.CONTACT_EMAIL)));
 app.get("/data-deletion", (c) => c.html(dataDeletionPage(c.env.CONTACT_EMAIL)));
+
+app.get("/auth/callback", async (c) => {
+  const error = c.req.query("error");
+  if (error) {
+    const reason = escapeHtml(c.req.query("error_description") ?? error);
+    return c.html(page("Instagram connection cancelled", `<p>Instagram said: ${reason}.</p>
+<p>Run <code>npm run cli -- connect</code> to try again.</p>`), 400);
+  }
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  if (!code || !state) {
+    return c.html(page("Connection failed", "<p>The login response was missing its code. Run <code>npm run cli -- connect</code> again.</p>"), 400);
+  }
+  try {
+    const { username } = await completeAuth(c.env, code, state, Date.now());
+    return c.html(page("Instagram connected", `<p>Connected as <strong>@${escapeHtml(username)}</strong>. You can close this tab.</p>`));
+  } catch (err) {
+    if (err instanceof AuthError) return c.html(page("Connection failed", `<p>${escapeHtml(err.message)}</p>`), 400);
+    throw err;
+  }
+});
 
 app.route("/admin", admin);
 

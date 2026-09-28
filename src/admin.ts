@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { instagramFromSettings } from "./account";
+import { startAuth } from "./auth";
 import { recentActions } from "./db/actions";
 import { getRule, insertRule, listRules, updateRule, type NewRule } from "./db/rules";
 import type { AppEnv } from "./env";
@@ -26,6 +27,8 @@ async function readJson(c: Context): Promise<unknown> {
     return undefined;
   }
 }
+
+admin.post("/auth/start", async (c) => c.json({ url: await startAuth(c.env, Date.now()) }));
 
 admin.get("/health", async (c) => c.json(await getHealth(c.env, Date.now())));
 
