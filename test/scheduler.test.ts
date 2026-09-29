@@ -30,6 +30,7 @@ function fakeZernio(fail?: () => Promise<never>) {
       return { messageId: `dm-${sent.length}` };
     },
     async listPosts() { return []; },
+    async listComments() { return []; },
   };
   return { zernio, sent };
 }

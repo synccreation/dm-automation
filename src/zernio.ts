@@ -86,6 +86,33 @@ export interface ZernioClient {
   replyToComment(mediaId: string, commentId: string, text: string, idempotencyKey: string): Promise<{ commentId: string | null }>;
   sendDm(conversationId: string, message: OutgoingMessage, idempotencyKey: string): Promise<{ messageId: string | null }>;
   listPosts(): Promise<MediaItem[]>;
+  listComments(mediaId: string): Promise<PostComment[]>;
+}
+
+export interface PostComment {
+  id: string;
+  text: string;
+  createdTime: string | null;
+  fromId: string;
+  fromUsername: string | null;
+  isOwner: boolean;
+}
+
+interface RawComment {
+  id?: string;
+  message?: string;
+  createdTime?: string;
+  from?: { id?: string; username?: string; isOwner?: boolean };
+  replies?: RawComment[];
+}
+
+function flattenComments(raw: RawComment[]): PostComment[] {
+  return raw.flatMap((c) => {
+    const own: PostComment[] = c.id && c.from?.id
+      ? [{ id: c.id, text: c.message ?? "", createdTime: c.createdTime ?? null, fromId: c.from.id, fromUsername: c.from.username?.replace(/^@/, "") ?? null, isOwner: c.from.isOwner === true }]
+      : [];
+    return [...own, ...flattenComments(c.replies ?? [])];
+  });
 }
 
 interface RawPost {
@@ -137,6 +164,22 @@ export function createZernioClient(options: { apiKey: string; accountId: string;
         "POST", `/inbox/conversations/${seg(conversationId)}/messages`, { body, idempotencyKey },
       );
       return { messageId: result.data?.messageId ?? null };
+    },
+    async listComments(mediaId) {
+      const comments: PostComment[] = [];
+      let cursor: string | undefined;
+      // Bounded so a viral post can't loop forever; 20 pages × 100 = 2,000 comments.
+      for (let page = 0; page < 20; page++) {
+        const query: Record<string, string> = { accountId, limit: "100" };
+        if (cursor) query.cursor = cursor;
+        const result = await zernioRequest<{ comments?: RawComment[]; pagination?: { hasMore?: boolean; cursor?: string } }>(
+          apiKey, "GET", `/inbox/comments/${seg(mediaId)}`, { query, fetch: options.fetch },
+        );
+        comments.push(...flattenComments(result.comments ?? []));
+        if (!result.pagination?.hasMore || !result.pagination.cursor) break;
+        cursor = result.pagination.cursor;
+      }
+      return comments;
     },
     async listPosts() {
       const result = await call<{ posts?: RawPost[]; data?: RawPost[] }>("GET", `/accounts/${seg(accountId)}/posts`);

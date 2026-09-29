@@ -5,6 +5,7 @@ import { getRule, insertRule, listRules, updateRule, type NewRule } from "./db/r
 import type { AppEnv } from "./env";
 import { getHealth } from "./health";
 import { createTrackedLink } from "./links";
+import { runBackfill } from "./backfill";
 import { parseNewRule, parseRulePatch } from "./rule-input";
 import { runSetup } from "./setup";
 import { constantTimeEqual } from "./webhook/verify";
@@ -71,6 +72,17 @@ admin.get("/media", async (c) => {
   if (!zernio) return c.json({ error: "Not set up yet. Run: npm run cli -- setup" }, 409);
   try {
     return c.json(await zernio.listPosts());
+  } catch (err) {
+    if (err instanceof ZernioError) return c.json({ error: err.message }, 502);
+    throw err;
+  }
+});
+
+admin.post("/backfill", async (c) => {
+  const mediaId = (await readJson(c) as { mediaId?: unknown } | undefined)?.mediaId;
+  if (typeof mediaId !== "string" || mediaId === "") return c.json({ error: "mediaId is required" }, 400);
+  try {
+    return c.json(await runBackfill(c.env, mediaId, Date.now()));
   } catch (err) {
     if (err instanceof ZernioError) return c.json({ error: err.message }, 502);
     throw err;

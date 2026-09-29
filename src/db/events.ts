@@ -71,3 +71,8 @@ export async function claimAwaitingTriggers(
     .all<TriggerRow>();
   return results.sort((a, b) => a.id - b.id);
 }
+
+export async function countTriggersForMedia(db: D1Database, mediaId: string): Promise<number> {
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM triggers WHERE media_id = ?").bind(mediaId).first<{ n: number }>();
+  return row?.n ?? 0;
+}

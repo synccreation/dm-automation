@@ -9,6 +9,7 @@ export type CliParse = { ok: true; request: CliRequest } | { ok: false; error: s
 export const USAGE = `Usage: npm run cli -- <command>
 
   setup [accountId]                     Link your Zernio Instagram account and register the webhook
+  backfill <postId>                     Run a post's existing comments through the rules
   health                                Connection and queue status
   media                                 Recent posts and reels with their IDs
   actions                               The 20 most recent sends, with errors
@@ -36,6 +37,8 @@ export function parseCli(argv: string[]): CliParse {
   switch (command) {
     case "setup":
       return request("POST", "/admin/setup", sub === undefined ? {} : { accountId: sub });
+    case "backfill":
+      return sub ? request("POST", "/admin/backfill", { mediaId: sub }) : { ok: false, error: "usage: backfill <postId>" };
     case "health":
       return request("GET", "/admin/health");
     case "media":
