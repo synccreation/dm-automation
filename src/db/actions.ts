@@ -6,7 +6,16 @@ export type ActionStatus = "pending" | "sending" | "sent" | "failed" | "dropped"
 export type ActionPayload =
   | { kind: "private_reply"; mediaId: string; commentId: string; text: string }
   | { kind: "public_reply"; mediaId: string; commentId: string; text: string }
-  | { kind: "dm"; conversationId: string; message: OutgoingMessage };
+  | {
+      kind: "dm";
+      conversationId: string;
+      message: OutgoingMessage;
+      /**
+       * Set on a link follow-up: sent straight to the commenter without waiting for their
+       * reply webhook (which sometimes never comes), retried until this time while Instagram refuses.
+       */
+      retryUntil?: number;
+    };
 
 export interface ActionRow {
   id: number;

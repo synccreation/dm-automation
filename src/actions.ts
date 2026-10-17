@@ -5,7 +5,11 @@ import type { ZernioClient } from "./zernio";
 export async function executeAction(zernio: ZernioClient, action: ActionRow): Promise<string | null> {
   const payload = action.payload;
   // Idempotency keys make Zernio replay instead of re-sending if we retry after a lost response.
-  const key = `action-${action.id}`;
+  // A link follow-up may be refused until the commenter replies, so each try gets its own key:
+  // a replayed refusal would block the try that should go through.
+  const key = payload.kind === "dm" && payload.retryUntil !== undefined
+    ? `action-${action.id}-try-${action.attempts}`
+    : `action-${action.id}`;
   switch (payload.kind) {
     case "private_reply":
       return (await zernio.privateReply(payload.mediaId, payload.commentId, payload.text)).messageId;

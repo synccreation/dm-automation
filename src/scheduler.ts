@@ -3,9 +3,10 @@ import { executeAction } from "./actions";
 import {
   claimActionById, claimDueActions, failStuckActions, markDropped, markFailed, markRetry, markSent, type ActionRow,
 } from "./db/actions";
-import { getTrigger } from "./db/events";
+import { claimTriggerLink, getTrigger, releaseTriggerLink } from "./db/events";
 import type { AppEnv } from "./env";
-import { MINUTE, isPrivateReplyExpired, retryDelayMs } from "./time";
+import { linkFollowUpOf, queueLinkFollowUp } from "./link-delivery";
+import { MINUTE, isPrivateReplyExpired, linkFollowUpDelayMs, retryDelayMs } from "./time";
 import { ZernioError, type ZernioClient } from "./zernio";
 
 /** Comment replies per run (the cron runs every minute): 720/hour, under Meta's 750/hour cap. */
@@ -81,11 +82,32 @@ async function processAction(
     }
   }
 
+  // Claimed before sending so the reply webhook can't send the same link meanwhile.
+  const followUp = linkFollowUpOf(action);
+  if (followUp && !(await claimTriggerLink(env.DB, followUp.triggerId))) {
+    await markDropped(env.DB, action.id, "link already sent after their reply");
+    report.dropped++;
+    return;
+  }
+
   let mid: string | null;
   try {
     mid = await executeAction(zernio, action);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (followUp) {
+      // Instagram may refuse until the commenter replies, so any error just means "not yet".
+      await releaseTriggerLink(env.DB, followUp.triggerId);
+      const nextTry = now + linkFollowUpDelayMs(action.attempts);
+      if (nextTry <= followUp.retryUntil) {
+        await markRetry(env.DB, action.id, nextTry, message);
+        report.retried++;
+      } else {
+        await markDropped(env.DB, action.id, `no reply within 7 days (last error: ${message})`);
+        report.dropped++;
+      }
+      return;
+    }
     const transient = err instanceof ZernioError ? err.transient : true;
     const delay = transient ? retryDelayMs(action.attempts) : null;
     if (delay !== null) {
@@ -101,4 +123,7 @@ async function processAction(
   // here must never be treated as a send failure and retried.
   await markSent(env.DB, action.id, mid, now);
   report.sent++;
+  if (action.type === "private_reply" && action.trigger_id !== null) {
+    await queueLinkFollowUp(env, action.trigger_id, now);
+  }
 }

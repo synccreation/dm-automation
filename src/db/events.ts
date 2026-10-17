@@ -72,6 +72,23 @@ export async function claimAwaitingTriggers(
   return results.sort((a, b) => a.id - b.id);
 }
 
+/** Claims one trigger's awaiting link for a direct send; false if it was already sent. */
+export async function claimTriggerLink(db: D1Database, triggerId: number): Promise<boolean> {
+  const result = await db
+    .prepare("UPDATE triggers SET link_state = 'delivered' WHERE id = ? AND link_state = 'awaiting_reply'")
+    .bind(triggerId)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/** Undoes claimTriggerLink after a send Instagram refused, so a later reply can still claim it. */
+export async function releaseTriggerLink(db: D1Database, triggerId: number): Promise<void> {
+  await db
+    .prepare("UPDATE triggers SET link_state = 'awaiting_reply' WHERE id = ? AND link_state = 'delivered'")
+    .bind(triggerId)
+    .run();
+}
+
 export async function countTriggersForMedia(db: D1Database, mediaId: string): Promise<number> {
   const row = await db.prepare("SELECT COUNT(*) AS n FROM triggers WHERE media_id = ?").bind(mediaId).first<{ n: number }>();
   return row?.n ?? 0;

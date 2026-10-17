@@ -5,10 +5,10 @@ import { getLinkById } from "../db/links";
 import { getRule, listActiveRules, type RuleRow } from "../db/rules";
 import { getSetting } from "../db/settings";
 import type { AppEnv } from "../env";
-import { trackedUrl } from "../links";
+import { linkMessage } from "../link-delivery";
 import { fillTemplate, findMatchingRule } from "../rules";
 import { sendActionNow } from "../scheduler";
-import { DAY, openingSendAt } from "../time";
+import { LINK_WINDOW_MS, openingSendAt } from "../time";
 import type { WebhookEvent } from "./parse";
 
 type CommentEvent = Extract<WebhookEvent, { kind: "comment" }>;
@@ -20,9 +20,6 @@ export interface HandleOptions {
   /** Runs work after the webhook is acknowledged (ctx.waitUntil); Zernio wants a reply within 5 s. */
   defer: (task: Promise<unknown>) => void;
 }
-
-const LINK_WINDOW_MS = 7 * DAY;
-const DEFAULT_LINK_TEXT = "Here you go 👇";
 
 export async function handleEvent(env: AppEnv, event: WebhookEvent, options: HandleOptions): Promise<void> {
   const key = `event:${event.eventId}`;
@@ -88,10 +85,7 @@ async function handleMessage(env: AppEnv, event: MessageEvent, options: HandleOp
       payload: {
         kind: "dm",
         conversationId: event.conversationId,
-        message: {
-          text: rule.link_text || DEFAULT_LINK_TEXT,
-          buttons: [{ type: "web_url", title: rule.button_label, url: trackedUrl(env.PUBLIC_URL, link.code, event.senderId) }],
-        },
+        message: linkMessage(env.PUBLIC_URL, rule, link, event.senderId),
       },
     }, options.now);
     // Queued first, then sent at once; if the immediate send fails or never runs,
