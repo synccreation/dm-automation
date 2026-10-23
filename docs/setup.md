@@ -5,15 +5,23 @@ You need:
 - a second Instagram account for testing
 - a free Cloudflare account
 - a free Zernio account
-- Node.js 24+, with `npm install` run once in this folder
+- Node.js 24 or newer
 
-Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for the value. If that prompt hangs in Git Bash, pipe the value in instead: `printf '%s' 'the-value' | npx wrangler secret put NAME`.
+Get the code and install it once:
+
+```bash
+git clone https://github.com/synccreation/dm-automation.git
+cd dm-automation
+npm install
+```
+
+Run the commands in Terminal on a Mac, or Git Bash on Windows. **Secrets:** `npx wrangler secret put NAME` asks for the value. If that prompt hangs in Git Bash, pipe the value in instead: `printf '%s' 'the-value' | npx wrangler secret put NAME`.
 
 ## 1. Cloudflare (one time)
 
 1. Run `npx wrangler login`.
 2. Create the database: `npx wrangler d1 create dm-automation`, then copy the printed `database_id` into `wrangler.jsonc`.
-3. Deploy: `npm run deploy`. In `wrangler.jsonc`, set `PUBLIC_URL` to the printed `workers.dev` URL and `CONTACT_EMAIL` to your address, then deploy again.
+3. Deploy: `npm run deploy`. In `wrangler.jsonc`, set `PUBLIC_URL` to the printed `workers.dev` URL and `CONTACT_EMAIL` to your address, then deploy again. (The values already in `wrangler.jsonc` belong to the original author. Replace all three: `database_id`, `PUBLIC_URL` and `CONTACT_EMAIL`.)
 4. Set the secrets (both are random values you generate):
    - `ADMIN_TOKEN`
    - `ZERNIO_WEBHOOK_SECRET`
@@ -42,7 +50,7 @@ Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for 
 4. Within about 1–2 minutes, check that:
    - a public reply appears under the comment
    - a DM arrives (in Requests, if the second account doesn't follow you) asking them to reply
-5. Reply to that DM from the second account. The **Open the guide** button should arrive within seconds.
+5. Reply to that DM from the second account. The **Open the guide** button should arrive within seconds. (If Instagram doesn't pass the reply on, the button still arrives about 2 minutes after the first DM.)
 6. Tap it. `npm run cli -- actions` should show every action as `sent`.
 
 **If nothing happens:**
@@ -51,3 +59,15 @@ Commands are for Git Bash. **Secrets:** `npx wrangler secret put NAME` asks for 
   - `"webhook":"rejected"` means the secrets don't match. Run `npm run cli -- setup` again.
   - Anything else showing errors: send it to Claude.
 - If `npm run cli -- actions` shows `failed` with an Instagram reason, that reason is quoted there. Send it to Claude.
+
+When the test works, turn the test rule off: `npm run cli -- rules list` shows its `id`, then run `npm run cli -- rules update <id> --json '{"active":false}'`.
+
+## 5. Your first real rule
+
+1. Post your reel. Run `npm run cli -- media` and copy its `id`.
+2. Write the rule into `rule.json`. [CLAUDE.md](../CLAUDE.md) explains each field. Keep the link out of `opening_text`: Instagram blocks buttons in a first DM to people who don't follow you.
+3. Add it: `npm run cli -- rules add --file rule.json`.
+4. If people commented before the rule existed, run `npm run cli -- backfill <id>` to answer them too.
+
+Or tell Claude Code: "My new reel is up. When someone comments `guide`, send them <your link>."
+
