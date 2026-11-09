@@ -16,6 +16,8 @@ export interface RuleRow {
   link_button_label: string;
   link_id: number | null;
   active: boolean;
+  /** Add a post to the scope by itself when its caption asks for one of the keywords. */
+  auto_scope: boolean;
   created_at: number;
 }
 
@@ -37,13 +39,14 @@ interface RawRule {
   link_button_label: string;
   link_id: number | null;
   active: number;
+  auto_scope: number;
   created_at: number;
 }
 
 const COLUMNS = [
   "name", "keywords", "scope", "on_comment", "on_story_reply", "public_replies",
   "opening_text", "button_label", "follow_gate", "not_following_text", "link_text",
-  "link_button_label", "link_id", "active",
+  "link_button_label", "link_id", "active", "auto_scope",
 ] as const satisfies readonly (keyof NewRule)[];
 
 function toRule(raw: RawRule): RuleRow {
@@ -56,6 +59,7 @@ function toRule(raw: RawRule): RuleRow {
     public_replies: JSON.parse(raw.public_replies) as string[],
     follow_gate: raw.follow_gate === 1,
     active: raw.active === 1,
+    auto_scope: raw.auto_scope === 1,
   };
 }
 
@@ -84,6 +88,19 @@ export async function updateRule(db: D1Database, id: number, patch: Partial<NewR
     .bind(...keys.map((key) => toColumnValue(key, patch[key])), id)
     .first<RawRule>();
   return raw ? toRule(raw) : null;
+}
+
+/** Appends a post to a rule's scope in one statement, so two comments at once can't lose one. */
+export async function addToScope(db: D1Database, id: number, mediaId: string): Promise<RuleRow | null> {
+  const raw = await db
+    .prepare(
+      `UPDATE rules SET scope = json_insert(scope, '$[#]', ?1)
+       WHERE id = ?2 AND scope != 'all' AND NOT EXISTS (SELECT 1 FROM json_each(rules.scope) WHERE value = ?1)
+       RETURNING *`,
+    )
+    .bind(mediaId, id)
+    .first<RawRule>();
+  return raw ? toRule(raw) : getRule(db, id);
 }
 
 export async function getRule(db: D1Database, id: number): Promise<RuleRow | null> {

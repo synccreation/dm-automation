@@ -16,6 +16,7 @@ export function newRule(overrides: Partial<NewRule> = {}): NewRule {
     link_button_label: "Open",
     link_id: null,
     active: true,
+    auto_scope: false,
     ...overrides,
   };
 }

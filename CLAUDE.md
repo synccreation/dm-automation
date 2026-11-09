@@ -38,12 +38,13 @@ Everything goes through `npm run cli -- <command>`, which reads `DM_WORKER_URL` 
 ```
 
 - `keywords`: whole-word, case-insensitive. Punctuation and emoji are ignored.
-- `scope`: a list of post IDs, or `"all"`. When several rules match, the one with the lowest ID wins.
+- `scope`: a list of post IDs (can start empty), or `"all"`. When several rules match, the one with the lowest ID wins.
+- `auto_scope` (default `true`): when someone comments a keyword on a post outside the scope, and that post's caption asks for the keyword ("comment “KIMI” and I'll send it"), the post joins the scope and the comment is answered. If several rules share the keyword, the newest one gets the post. Trial reels and re-uploads join the same way.
 - `opening_text` (up to 640 characters): the first DM, sent about a minute after the comment. `{name}` becomes their username. **Never put the link here.** Instagram refuses buttons in a first DM to non-followers, and a refused send uses up the one private reply Instagram allows per comment.
 - `link_text`, `button_label` (up to 20 characters), `link_url`: the DM with the link button. It goes out when they reply, or 2 minutes after the opening DM if their reply never arrives.
 - Setting `link_url` in `rules update` swaps the link. Click counts start over for the new link.
 
-**Post not live yet?** Add the rule with `"scope": ["pending-<short-name>"]` and `"active": false`. Once the post is up, find its ID with `media`, run `rules update <id> --json '{"scope":["<post ID>"],"active":true}'`, then `backfill <post ID>` so early commenters are answered too. Instagram only allows a private reply within 7 days of a comment.
+**Post not live yet?** Add the rule switched on with `"scope": []`. Nothing else is needed: the first comment on a post whose caption asks for the keyword adds that post. The caption has to say "comment <keyword>" (or "type", "reply", "DM"), with the keyword at most four words after it. To answer comments posted before the rule existed, run `backfill <post ID>`. Instagram only allows a private reply within 7 days of a comment.
 
 ## Changing the code
 

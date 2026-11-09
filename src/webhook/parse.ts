@@ -8,6 +8,8 @@ export type WebhookEvent =
       fromId: string;
       fromUsername: string | null;
       isOwn: boolean;
+      /** The post's caption from Zernio's synced copy; null when Zernio never synced the post. */
+      caption: string | null;
     }
   | {
       kind: "message";
@@ -68,12 +70,14 @@ export function parseWebhook(body: unknown): WebhookEvent | null {
     const comment = field(body, "comment");
     const author = field(comment, "author");
     const commentId = str(field(comment, "id"));
-    const mediaId = str(field(comment, "platformPostId")) ?? str(field(field(body, "post"), "platformPostId"));
+    const post = field(body, "post");
+    const mediaId = str(field(comment, "platformPostId")) ?? str(field(post, "platformPostId"));
     const fromId = str(field(author, "id"));
     if (!commentId || !mediaId || !fromId) return ignored;
     return {
       kind: "comment", eventId, commentId, mediaId, text: text(field(comment, "text")), fromId,
       fromUsername: username(field(author, "username")), isOwn: field(author, "isOwnAccount") === true,
+      caption: str(field(post, "content")),
     };
   }
 

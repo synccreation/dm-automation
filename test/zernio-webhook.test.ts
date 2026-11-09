@@ -28,7 +28,7 @@ describe("parseWebhook", () => {
   it("parses a comment", () => {
     expect(parseWebhook(commentEvent({ eventId: "e1" }))).toEqual({
       kind: "comment", eventId: "e1", commentId: "c-1", mediaId: "media-1", text: "GUIDE please",
-      fromId: "user-1", fromUsername: "anna", isOwn: false,
+      fromId: "user-1", fromUsername: "anna", isOwn: false, caption: null,
     });
   });
 

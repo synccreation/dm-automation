@@ -7,6 +7,7 @@ const account = { id: ACCOUNT_ID, accountId: ACCOUNT_ID, profileId: PROFILE_ID, 
 
 export function commentEvent(o: {
   eventId?: string; commentId?: string; mediaId?: string; text?: string; fromId?: string; username?: string; isOwn?: boolean;
+  caption?: string;
 } = {}) {
   return {
     id: o.eventId ?? nextEventId(),
@@ -22,7 +23,7 @@ export function commentEvent(o: {
       parentCommentId: null,
       author: { id: o.fromId ?? "user-1", username: o.username ?? "anna", name: "Anna", ...(o.isOwn ? { isOwnAccount: true } : {}) },
     },
-    post: { id: "p-1", platformPostId: o.mediaId ?? "media-1", content: null, permalink: "https://instagram.com/p/x" },
+    post: { id: "p-1", platformPostId: o.mediaId ?? "media-1", content: o.caption ?? null, permalink: "https://instagram.com/p/x" },
     account,
     timestamp: "2026-09-28T12:00:01Z",
   };

@@ -25,7 +25,7 @@ export async function runBackfill(env: AppEnv, mediaId: string, now: number): Pr
     if (now - createdAt > 7 * DAY) continue;
     await handleEvent(env, {
       kind: "comment", eventId: `backfill:${comment.id}`, commentId: comment.id, mediaId, text: comment.text,
-      fromId: comment.fromId, fromUsername: comment.fromUsername, isOwn: comment.isOwner,
+      fromId: comment.fromId, fromUsername: comment.fromUsername, isOwn: comment.isOwner, caption: null,
     }, { now, defer: () => {} });
   }
   return { scanned: comments.length, triggered: (await countTriggers()) - before };

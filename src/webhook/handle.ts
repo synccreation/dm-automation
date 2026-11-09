@@ -1,3 +1,4 @@
+import { attachByCaption } from "../auto-scope";
 import { enqueueAction, enqueueActionOnce } from "../db/actions";
 import { upsertContact } from "../db/contacts";
 import { claimAwaitingTriggers, findTriggerId, insertTrigger, isProcessed, markProcessed } from "../db/events";
@@ -36,7 +37,10 @@ async function handleComment(env: AppEnv, event: CommentEvent, options: HandleOp
   const byCreator =
     event.isOwn || (ownUsername !== null && event.fromUsername?.toLowerCase() === ownUsername.toLowerCase());
   if (byCreator) return;
-  const rule = findMatchingRule(await listActiveRules(env.DB), event.text, event.mediaId, "comment");
+  const rules = await listActiveRules(env.DB);
+  const rule =
+    findMatchingRule(rules, event.text, event.mediaId, "comment") ??
+    (await attachByCaption(env, rules, event, options.now));
   if (rule) await triggerCommentRule(env, rule, event, options);
 }
 

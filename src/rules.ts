@@ -22,6 +22,22 @@ export function matchesKeyword(text: string, keyword: string): boolean {
   return ` ${normalizeText(text)} `.includes(` ${needle} `);
 }
 
+const ASK_WORDS = new Set(["comment", "comments", "type", "reply", "dm"]);
+
+/**
+ * True when a caption asks people to send the keyword: "comment “KIMI” and I'll send it",
+ * "comment the word guide". The keyword has to follow the ask word within four words.
+ */
+export function captionAsksFor(caption: string, keyword: string): boolean {
+  const needle = normalizeText(keyword).split(" ").filter(Boolean);
+  if (needle.length === 0) return false;
+  const words = normalizeText(caption).split(" ");
+  return words.some((word, i) =>
+    ASK_WORDS.has(word) &&
+    [1, 2, 3, 4].some((gap) => needle.every((part, k) => words[i + gap + k] === part)),
+  );
+}
+
 function inScope(scope: Scope, mediaId: string): boolean {
   return scope === "all" || scope.includes(mediaId);
 }

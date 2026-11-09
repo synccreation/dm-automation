@@ -20,7 +20,7 @@ describe("worker scaffold", () => {
       .filter((n) => !n.startsWith("_cf") && !n.startsWith("sqlite_") && n !== "d1_migrations");
     expect(names).toEqual([
       "actions", "clicks", "contacts", "conversations", "links",
-      "messages", "processed_events", "rules", "settings", "triggers",
+      "messages", "post_captions", "processed_events", "rules", "settings", "triggers",
     ]);
   });
 });

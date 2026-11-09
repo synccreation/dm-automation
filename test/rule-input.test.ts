@@ -10,6 +10,7 @@ describe("parseNewRule", () => {
       value: {
         ...minimal, scope: "all", on_comment: true, on_story_reply: false, public_replies: [],
         follow_gate: false, not_following_text: "", link_text: "", link_button_label: "Open", active: true,
+        auto_scope: true,
       },
     });
   });
@@ -21,7 +22,8 @@ describe("parseNewRule", () => {
     [{ ...minimal, keywords: [] }, "keywords must be a non-empty list"],
     [{ ...minimal, link_url: "ftp://x" }, "link_url must be an http(s) URL"],
     [{ ...minimal, button_label: "x".repeat(21) }, "button_label must be at most 20 characters"],
-    [{ ...minimal, scope: [] }, "scope must be"],
+    [{ ...minimal, scope: [""] }, "scope must be"],
+    [{ ...minimal, scope: [], auto_scope: false }, "scope must list media IDs when auto_scope is false"],
     [{ ...minimal, public_replies: [""] }, "public_replies"],
     ["nope", "body must be a JSON object"],
   ])("rejects %j", (body, message) => {

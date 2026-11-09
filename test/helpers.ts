@@ -12,7 +12,7 @@ export const testEnv = env as unknown as AppEnv;
 // Child tables first so foreign keys never block the delete.
 const TABLES = [
   "clicks", "actions", "triggers", "messages", "conversations",
-  "processed_events", "contacts", "rules", "links", "settings",
+  "processed_events", "contacts", "rules", "links", "settings", "post_captions",
 ];
 
 export async function resetDb(): Promise<void> {

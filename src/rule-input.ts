@@ -22,15 +22,17 @@ const CHECKS: Record<keyof RuleInput, Check> = {
       ? "each need a letter or number (emoji-only keywords are not supported)"
       : null;
   },
+  // An empty list is fine: with auto_scope, posts whose caption asks for the keyword join it.
   scope: (value) =>
     value === "all" ||
-    (Array.isArray(value) && value.length > 0 && value.every((id) => typeof id === "string" && id.trim() !== ""))
+    (Array.isArray(value) && value.every((id) => typeof id === "string" && id.trim() !== ""))
       ? null
-      : 'must be "all" or a non-empty list of media IDs',
+      : 'must be "all" or a list of media IDs',
   on_comment: bool,
   on_story_reply: bool,
   follow_gate: bool,
   active: bool,
+  auto_scope: bool,
   public_replies: (value) => {
     if (!Array.isArray(value) || value.length > 10) return "must be a list of at most 10 replies";
     return value.some((r) => typeof r !== "string" || r.trim() === "" || r.length > 300)
@@ -55,6 +57,7 @@ const DEFAULTS = {
   link_text: "",
   link_button_label: "Open",
   active: true,
+  auto_scope: true,
 } satisfies Partial<RuleInput>;
 
 const REQUIRED = ["name", "keywords", "opening_text", "button_label"] as const;
@@ -80,7 +83,11 @@ export function parseNewRule(body: unknown): ParseResult<RuleInput> {
     if (result.value[key] === undefined) return { ok: false, error: `${key} is required` };
   }
   // Every field was validated above and the required ones are present.
-  return { ok: true, value: { ...DEFAULTS, ...result.value } as unknown as RuleInput };
+  const rule = { ...DEFAULTS, ...result.value } as unknown as RuleInput;
+  if (Array.isArray(rule.scope) && rule.scope.length === 0 && !rule.auto_scope) {
+    return { ok: false, error: "scope must list media IDs when auto_scope is false" };
+  }
+  return { ok: true, value: rule };
 }
 
 export function parseRulePatch(body: unknown): ParseResult<Partial<RuleInput>> {
