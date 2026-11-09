@@ -29,14 +29,15 @@ Everything goes through `npm run cli -- <command>`, which reads `DM_WORKER_URL` 
   "name": "Setup guide (auto)",
   "keywords": ["auto"],
   "scope": ["<post ID from media>"],
-  "public_replies": ["Sent! Check your DMs 👀", "Just sent it your way 🙌"],
-  "opening_text": "Hey {name}! 👋 Reply \"auto\" and I'll send it right over.",
-  "link_text": "Here's the full setup 👇",
+  "public_replies": ["Sent! Check your DMs", "Just sent it your way", "Check your DMs"],
+  "opening_text": "Hey {name}! Reply \"auto\" and I'll send it right over.",
+  "link_text": "Here's the full setup.",
   "button_label": "Get the setup",
   "link_url": "https://example.com"
 }
 ```
 
+- **No emoji** in `public_replies`, `opening_text`, `link_text`, or the button labels. The owner doesn't want them, and the bot refuses a rule that has one.
 - `keywords`: whole-word, case-insensitive. Punctuation and emoji are ignored.
 - `scope`: a list of post IDs (can start empty), or `"all"`. When several rules match, the one with the lowest ID wins.
 - `auto_scope` (default `true`): when someone comments a keyword on a post outside the scope, and that post's caption asks for the keyword ("comment “KIMI” and I'll send it"), the post joins the scope and the comment is answered. If several rules share the keyword, the newest one gets the post. Trial reels and re-uploads join the same way.

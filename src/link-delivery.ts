@@ -7,7 +7,7 @@ import { trackedUrl } from "./links";
 import type { OutgoingMessage } from "./messages";
 import { LINK_FOLLOW_UP_DELAY_MS, LINK_WINDOW_MS } from "./time";
 
-const DEFAULT_LINK_TEXT = "Here you go 👇";
+const DEFAULT_LINK_TEXT = "Here you go";
 
 /** The DM that delivers a rule's link to one commenter. */
 export function linkMessage(publicUrl: string, rule: RuleRow, link: LinkRow, contactIgsid: string): OutgoingMessage {

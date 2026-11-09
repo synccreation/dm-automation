@@ -14,6 +14,11 @@ const text = (max: number, allowEmpty = false): Check => (value) => {
 };
 const bool: Check = (value) => (typeof value === "boolean" ? null : "must be true or false");
 
+// The owner doesn't want emoji in anything the bot posts or sends (2026-11-09). © ® ™ stay allowed.
+const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u;
+const hasEmoji = (value: unknown) => typeof value === "string" && EMOJI.test(value);
+const noEmoji = (check: Check): Check => (value) => check(value) ?? (hasEmoji(value) ? "must not contain emoji" : null);
+
 const CHECKS: Record<keyof RuleInput, Check> = {
   name: text(100),
   keywords: (value) => {
@@ -35,15 +40,16 @@ const CHECKS: Record<keyof RuleInput, Check> = {
   auto_scope: bool,
   public_replies: (value) => {
     if (!Array.isArray(value) || value.length > 10) return "must be a list of at most 10 replies";
-    return value.some((r) => typeof r !== "string" || r.trim() === "" || r.length > 300)
-      ? "must each be 1–300 characters"
-      : null;
+    if (value.some((r) => typeof r !== "string" || r.trim() === "" || r.length > 300)) {
+      return "must each be 1–300 characters";
+    }
+    return value.some(hasEmoji) ? "must not contain emoji" : null;
   },
-  opening_text: text(640),
-  button_label: text(20),
-  not_following_text: text(640, true),
-  link_text: text(640, true),
-  link_button_label: text(20),
+  opening_text: noEmoji(text(640)),
+  button_label: noEmoji(text(20)),
+  not_following_text: noEmoji(text(640, true)),
+  link_text: noEmoji(text(640, true)),
+  link_button_label: noEmoji(text(20)),
   link_url: (value) => (typeof value === "string" && isHttpUrl(value) ? null : "must be an http(s) URL"),
 };
 

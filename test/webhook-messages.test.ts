@@ -56,7 +56,7 @@ describe("POST /webhook: replies", () => {
     await seedLead({ link_text: "" });
     const calls = stubGlobalFetch(SENT);
     await postWebhook(messageEvent());
-    expect(JSON.parse(calls[0]!.body!).message).toBe("Here you go 👇");
+    expect(JSON.parse(calls[0]!.body!).message).toBe("Here you go");
   });
 
   it("sends the link only once when they reply twice", async () => {

@@ -25,11 +25,22 @@ describe("parseNewRule", () => {
     [{ ...minimal, scope: [""] }, "scope must be"],
     [{ ...minimal, scope: [], auto_scope: false }, "scope must list media IDs when auto_scope is false"],
     [{ ...minimal, public_replies: [""] }, "public_replies"],
+    [{ ...minimal, public_replies: ["Check your DMs 👀"] }, "public_replies must not contain emoji"],
+    [{ ...minimal, public_replies: ["Check your DMs ✨"] }, "public_replies must not contain emoji"],
+    [{ ...minimal, opening_text: "Hey {name}! 👋 Reply \"x\"" }, "opening_text must not contain emoji"],
+    [{ ...minimal, link_text: "Here's the guide 👇" }, "link_text must not contain emoji"],
+    [{ ...minimal, button_label: "Get it 🔥" }, "button_label must not contain emoji"],
+    [{ ...minimal, not_following_text: "Follow me first 🙏" }, "not_following_text must not contain emoji"],
     ["nope", "body must be a JSON object"],
   ])("rejects %j", (body, message) => {
     const result = parseNewRule(body);
     expect(result.ok).toBe(false);
     expect(result.ok ? "" : result.error).toContain(message);
+  });
+
+  it("allows plain punctuation and ™ in texts", () => {
+    const result = parseNewRule({ ...minimal, public_replies: ["Sent! Check your DMs"], link_text: "Gamma™ → here." });
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -39,5 +50,10 @@ describe("parseRulePatch", () => {
   });
   it("still validates the fields it gets", () => {
     expect(parseRulePatch({ active: "no" })).toEqual({ ok: false, error: "active must be true or false" });
+  });
+  it("refuses emoji in an update too", () => {
+    expect(parseRulePatch({ public_replies: ["Sent 🙌"] })).toEqual({
+      ok: false, error: "public_replies must not contain emoji",
+    });
   });
 });
